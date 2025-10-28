@@ -1,2 +1,6 @@
 /references
 .env
+config/
+dags/
+logs/
+plugins/
