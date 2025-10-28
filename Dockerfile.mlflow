@@ -1,0 +1,9 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir mlflow psycopg2-binary boto3
+
+EXPOSE 5000
+
+CMD ["mlflow", "server"]
