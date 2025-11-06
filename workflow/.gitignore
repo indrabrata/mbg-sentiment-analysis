@@ -1,6 +1,5 @@
 /references
 .env
-config/
-dags/
 logs/
-plugins/
+.venv
+__pycache__
