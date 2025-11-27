@@ -5,9 +5,9 @@ from pathlib import Path
 from fastapi.responses import FileResponse, JSONResponse
 import uvicorn
 
-MODEL_JOBLIB = "results_indobertweet/model_pipeline.joblib"
-EVAL_DIR = "results_indobertweet/eval"
-HF_MODEL_DIR = "results_indobertweet/best_model"
+MODEL_JOBLIB = "./model/results_indobertweet/model_pipeline.joblib"
+EVAL_DIR = "./model/results_indobertweet/eval"
+HF_MODEL_DIR = "./model/results_indobertweet/best_model"
 
 # ===== Label mapping =====
 LABEL_MAP = {
