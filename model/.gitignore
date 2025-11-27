@@ -1,4 +1,4 @@
 /data
-/src/__pycache__
-/src/serving/__pycache__
+/model/src/__pycache__
+/app/__pycache__
 /results_indobertweet
