@@ -1,0 +1,26 @@
+seed: 42
+model_name: indobenchmark/indobert-base-p1
+num_labels: 3   # 0=negative, 1=neutral, 2=positive
+
+data:
+  # default: pake hasil auto-label
+  train_csv: data/processed/train_auto.csv
+  test_csv:  data/processed/test_auto.csv
+  text_columns: ["text","clean_text","full_text","tweet","content","body"]
+  label_columns: ["label","sentiment","target"]
+
+training:
+  max_length: 128
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  batch_size: 16
+  epochs: 3
+  eval_strategy: "epoch"
+  gradient_accumulation_steps: 1
+  fp16: false
+
+mlflow:
+  tracking_uri: "file:./mlruns"
+  experiment_name: "mbg-sentiment"
+
+artifacts_dir: artifacts

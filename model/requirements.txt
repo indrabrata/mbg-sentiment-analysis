@@ -1,0 +1,11 @@
+pandas>=2.0.0
+numpy
+scikit-learn
+datasets>=2.14
+transformers>=4.41.0
+torch
+tqdm
+seaborn
+matplotlib
+transformers[torch]
+accelerate -U
