@@ -1,0 +1,10 @@
+[project]
+name = "model"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "dvc>=3.64.0",
+    "dvc-ssh>=4.2.2",
+]
