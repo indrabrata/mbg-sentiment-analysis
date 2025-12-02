@@ -1,0 +1,67 @@
+name: Collect Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      keyword:
+        description: "Search keyword"
+        required: false
+        default: "makan bergizi gratis"
+  schedule:
+    # Run daily at 18:00 UTC (01:00 WIB)
+    - cron: "0 18 * * *"
+
+env:
+  SEARCH_KEYWORD: ${{ github.event.inputs.keyword || vars.SEARCH_KEYWORD || 'makan bergizi gratis' }}
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: "scrapper/pnpm-lock.yaml"
+
+      - name: Install dependencies
+        working-directory: ./scrapper
+        run: pnpm install --frozen-lockfile
+
+      - name: Build scrapper
+        working-directory: ./scrapper
+        run: pnpm build
+
+      - name: Get yesterday's date in Indonesia timezone
+        id: date
+        run: |
+          YESTERDAY_DATE=$(TZ='Asia/Jakarta' date -d 'yesterday' +%Y-%m-%d)
+          echo "current_date=$YESTERDAY_DATE" >> $GITHUB_OUTPUT
+
+      - name: Run scrapper
+        working-directory: ./scrapper
+        run: |
+          node dist/bin.js \
+            -o "mbg" \
+            -s "\"${{ env.SEARCH_KEYWORD }}\" since:${{ steps.date.outputs.current_date }} lang:id" \
+            --tab "LATEST" \
+            -l 30 \
+            --token ${{ secrets.TWITTER_TOKEN }}
+
+      - name: Upload collected data
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scraped-data-${{ steps.date.outputs.current_date }}
+          path: scrapper/tweets-data/mbg.csv
+          retention-days: 30
