@@ -13,6 +13,3 @@ pgadmin_data/
 
 # Backups
 backups/
-
-# Mlflow
-/mlflow/basic_auth.ini
