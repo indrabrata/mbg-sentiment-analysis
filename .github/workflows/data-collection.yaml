@@ -15,9 +15,10 @@ on:
 
 env:
   SEARCH_KEYWORD: ${{ github.event.inputs.keyword || vars.SEARCH_KEYWORD || 'makan bergizi gratis' }}
+  TOTAL_DATA: ${{ vars.TOTAL_DATA || '50' }}
 
 jobs:
-  collect-data:
+  data-collection:
     runs-on: ubuntu-latest
 
     steps:
@@ -55,9 +56,9 @@ jobs:
         run: |
           node dist/bin.js \
             -o "mbg" \
-            -s "\"${{ env.SEARCH_KEYWORD }}\" since:${{ steps.date.outputs.current_date }} lang:id" \
+            -s "${{ env.SEARCH_KEYWORD }} since:${{ steps.date.outputs.current_date }} lang:id" \
             --tab "LATEST" \
-            -l 30 \
+            -l ${{ env.TOTAL_DATA }} \
             --token ${{ secrets.TWITTER_TOKEN }}
 
       - name: Upload collected data
