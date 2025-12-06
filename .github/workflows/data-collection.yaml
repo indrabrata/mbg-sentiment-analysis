@@ -17,7 +17,7 @@ env:
   SEARCH_KEYWORD: ${{ github.event.inputs.keyword || vars.SEARCH_KEYWORD || 'makan bergizi gratis' }}
 
 jobs:
-  collect:
+  collect-data:
     runs-on: ubuntu-latest
 
     steps:
