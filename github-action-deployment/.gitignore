@@ -1,0 +1,15 @@
+# Environment files
+.env
+
+# Logs
+*.log
+logs/
+
+# Docker volumes (if mounted locally)
+data/
+postgres_data/
+minio_data/
+pgadmin_data/
+
+# Backups
+backups/

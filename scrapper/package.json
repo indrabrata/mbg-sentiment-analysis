@@ -1,5 +1,6 @@
 {
   "name": "tweet-harvest",
+  "version": "1.0.0",
   "description": "A Twitter crawler helper with auth",
   "files": [
     "dist/"
