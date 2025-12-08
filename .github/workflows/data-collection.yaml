@@ -59,10 +59,49 @@ jobs:
             -l ${{ env.TOTAL_DATA }} \
             --token ${{ secrets.TWITTER_TOKEN }}
 
-      - name: Upload collected data
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install Python dependencies
+        run: |
+          pip install pandas emoji
+
+      - name: Preprocess tweet data (cleaned)
+        run: |
+          python model/src/cleaning/cleaned_text.py \
+            --input scrapper/tweets-data/mbg.csv \
+            --output_dir scrapper/tweets-data \
+            --date "${{ steps.date.outputs.current_date }}"
+
+      - name: Add empty label column (unlabeled dataset)
+        run: |
+          python model/src/cleaning/add_unlabeled_column.py \
+            --input scrapper/tweets-data/mbg_cleaned_${{ steps.date.outputs.current_date }}.csv \
+            --output_dir scrapper/tweets-data \
+            --date "${{ steps.date.outputs.current_date }}"
+
+      - name: Upload RAW scraped data
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: scraped-data-${{ steps.date.outputs.current_date }}
+          name: raw-${{ steps.date.outputs.current_date }}
           path: scrapper/tweets-data/mbg.csv
+          retention-days: 30
+
+      - name: Upload CLEANED data
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cleaned-${{ steps.date.outputs.current_date }}
+          path: scrapper/tweets-data/mbg_cleaned_<date>.csv
+          retention-days: 30
+
+      - name: Upload CLEANED UNLABELED data
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unlabeled-${{ steps.date.outputs.current_date }}
+          path: scrapper/tweets-data/mbg_cleaned_unlabeled_<date>.csv
           retention-days: 30
