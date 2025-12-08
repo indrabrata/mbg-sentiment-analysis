@@ -1,0 +1,7 @@
+[core]
+    remote = myremote
+['remote "myremote"']
+    url = ssh://dev@proxy.bccdev.id:11003/home/dev/dataset-sentiment-analysis
+    user = dev
+    port = 11003
+    ask_password = true
