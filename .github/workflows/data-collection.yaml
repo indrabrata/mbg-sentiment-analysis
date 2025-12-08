@@ -95,7 +95,7 @@ jobs:
         if: always()
         with:
           name: cleaned-${{ steps.date.outputs.current_date }}
-          path: scrapper/tweets-data/mbg_cleaned_<date>.csv
+          path: scrapper/tweets-data/mbg_cleaned_${{ steps.date.outputs.current_date }}.csv
           retention-days: 30
 
       - name: Upload CLEANED UNLABELED data
@@ -103,5 +103,5 @@ jobs:
         if: always()
         with:
           name: unlabeled-${{ steps.date.outputs.current_date }}
-          path: scrapper/tweets-data/mbg_cleaned_unlabeled_<date>.csv
+          path: scrapper/tweets-data/mbg_cleaned_unlabeled_${{ steps.date.outputs.current_date }}.csv
           retention-days: 30
