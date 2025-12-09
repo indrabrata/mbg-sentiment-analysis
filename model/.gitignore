@@ -1,3 +1,4 @@
+data/
 results_indobertweet/
 **/__pycache__/
 *.pyc
