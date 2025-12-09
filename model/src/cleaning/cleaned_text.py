@@ -1,6 +1,5 @@
 import re, pandas as pd, argparse, logging, emoji
 from pathlib import Path
-from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -16,7 +15,7 @@ def preprocess_tweet(text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
-def clean_text(input_path: str, output_dir: str, date_str: str):
+def clean_text(input_path: str, output_dir: str):
     df = pd.read_csv(input_path)
     logging.info(f"Input rows = {len(df)}")
 
@@ -39,8 +38,8 @@ def clean_text(input_path: str, output_dir: str, date_str: str):
 
     out = df[exist].copy()
 
-    out_path = Path(output_dir) / f"mbg_cleaned_{date_str}.csv"
-    Path(output_path := out_path).parent.mkdir(parents=True, exist_ok=True)
+    output_path = Path(output_dir) / "mbg_cleaned.csv"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     out.to_csv(output_path, index=False, encoding="utf-8-sig")
     logging.info(f"✅ Cleaned saved to: {output_path} (rows={len(out)})")
@@ -51,13 +50,9 @@ def clean_text(input_path: str, output_dir: str, date_str: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cleaning text MBG (Scraped Twitter).")
 
-    parser.add_argument("--input", required=True, help="Input CSV path from scrapper")
-    parser.add_argument("--output_dir", required=True, help="Directory for cleaned file")
-    parser.add_argument("--date", required=False, help="Date string (YYYY-MM-DD)")
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output_dir", required=True)
 
     args = parser.parse_args()
 
-    # If no date provided, use today's date
-    date_str = args.date or datetime.now().strftime("%Y-%m-%d")
-
-    clean_text(args.input, args.output_dir, date_str)
+    clean_text(args.input, args.output_dir)
