@@ -8,7 +8,6 @@ on:
         required: false
         default: "makan bergizi gratis"
   schedule:
-    # Run daily at 18:00 UTC (01:00 WIB)
     - cron: "0 18 * * *"
 
 env:
@@ -16,8 +15,13 @@ env:
   TOTAL_DATA: ${{ vars.TOTAL_DATA || '50' }}
 
 jobs:
+
   data-collection:
     runs-on: ubuntu-latest
+
+    outputs:
+      current_date: ${{ steps.date.outputs.current_date }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -57,10 +61,15 @@ jobs:
             --tab "LATEST" \
             -l ${{ env.TOTAL_DATA }} \
             --token ${{ secrets.TWITTER_TOKEN }}
-       
+            
   data-preprocessing:
     needs: data-collection
+    runs-on: ubuntu-latest
+
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -74,20 +83,27 @@ jobs:
         run: |
           python model/src/cleaning/cleaned_text.py \
             --input scrapper/tweets-data/mbg.csv \
-            --output_dir scrapper/tweets-data \
-            --date "${{ steps.date.outputs.current_date }}"
+            --output_dir scrapper/tweets-data
+
+      - name: Verify cleaned file exists
+        run: |
+          if [ ! -f scrapper/tweets-data/mbg_cleaned.csv ]; then
+            echo "CLEANED FILE NOT FOUND!"
+            ls -la scrapper/tweets-data
+            exit 1
+          fi
 
       - name: Add empty label column (unlabeled dataset)
         run: |
           python model/src/cleaning/add_unlabeled_column.py \
-            --input scrapper/tweets-data/mbg_cleaned_${{ steps.date.outputs.current_date }}.csv \
+            --input scrapper/tweets-data/mbg_cleaned.csv \
             --output_dir scrapper/tweets-data \
-            --date "${{ steps.date.outputs.current_date }}"
+            --date "${{ needs.data-collection.outputs.current_date }}"
 
       - name: Upload CLEANED UNLABELED data
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: unlabeled-${{ steps.date.outputs.current_date }}
-          path: scrapper/tweets-data/mbg_cleaned_unlabeled_${{ steps.date.outputs.current_date }}.csv
+          name: unlabeled-${{ needs.data-collection.outputs.current_date }}
+          path: scrapper/tweets-data/mbg_cleaned_unlabeled_${{ needs.data-collection.outputs.current_date }}.csv
           retention-days: 30
