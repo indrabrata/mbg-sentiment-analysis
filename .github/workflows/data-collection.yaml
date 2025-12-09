@@ -65,8 +65,9 @@ jobs:
       - name: Upload scraped RAW data
         uses: actions/upload-artifact@v4
         with:
-          name: raw-mbg
+          name: raw-${{ steps.date.outputs.current_date }}
           path: scrapper/tweets-data/mbg.csv
+
 
 
   data-preprocessing:
@@ -79,8 +80,8 @@ jobs:
       - name: Download RAW data
         uses: actions/download-artifact@v4
         with:
-          name: raw-mbg
-          path: scrapper/tweets-data
+          name: raw-${{ needs.data-collection.outputs.current_date }}
+          path: scrapper/tweets-data  
 
       - name: Setup Python
         uses: actions/setup-python@v4
