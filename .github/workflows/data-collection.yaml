@@ -61,14 +61,26 @@ jobs:
             --tab "LATEST" \
             -l ${{ env.TOTAL_DATA }} \
             --token ${{ secrets.TWITTER_TOKEN }}
-            
+      
+      - name: Upload scraped RAW data
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-mbg
+          path: scrapper/tweets-data/mbg.csv
+
+
   data-preprocessing:
     needs: data-collection
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Download RAW data
+        uses: actions/download-artifact@v4
+        with:
+          name: raw-mbg
+          path: scrapper/tweets-data
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -85,14 +97,6 @@ jobs:
             --input scrapper/tweets-data/mbg.csv \
             --output_dir scrapper/tweets-data
 
-      - name: Verify cleaned file exists
-        run: |
-          if [ ! -f scrapper/tweets-data/mbg_cleaned.csv ]; then
-            echo "CLEANED FILE NOT FOUND!"
-            ls -la scrapper/tweets-data
-            exit 1
-          fi
-
       - name: Add empty label column (unlabeled dataset)
         run: |
           python model/src/cleaning/add_unlabeled_column.py \
@@ -106,4 +110,4 @@ jobs:
         with:
           name: unlabeled-${{ needs.data-collection.outputs.current_date }}
           path: scrapper/tweets-data/mbg_cleaned_unlabeled_${{ needs.data-collection.outputs.current_date }}.csv
-          retention-days: 30
+
