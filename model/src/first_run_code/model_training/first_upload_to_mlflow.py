@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-"""
-first_upload_to_mlflow.py
-Upload FIRST MODEL to MLflow Registry and set it as Production/Staging.
-Use this ONCE before enabling weekly retraining pipeline.
-"""
-
 import argparse
 import os
 import logging
@@ -13,9 +6,6 @@ from mlflow import MlflowClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-# -------------------------------------------------
-# SETUP ENV (MLflow + MinIO)
-# -------------------------------------------------
 def setup_mlflow_env():
     os.environ["MLFLOW_TRACKING_URI"] = os.getenv("MLFLOW_TRACKING_URI", "")
     os.environ["MLFLOW_TRACKING_USERNAME"] = os.getenv("MLFLOW_TRACKING_USERNAME", "")
@@ -27,10 +17,6 @@ def setup_mlflow_env():
     mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
     logging.info(f"MLflow Tracking URI: {mlflow.get_tracking_uri()}")
 
-
-# -------------------------------------------------
-# FIRST MODEL UPLOAD
-# -------------------------------------------------
 def upload_first_model(model_dir: str, model_name: str, stage: str):
     client = MlflowClient()
 
@@ -60,9 +46,6 @@ def upload_first_model(model_dir: str, model_name: str, stage: str):
         return mv.version
 
 
-# -------------------------------------------------
-# MAIN
-# -------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Upload FIRST trained model to MLflow registry.")
     parser.add_argument("--model_dir", required=True, help="Directory containing best_model/ folder")
