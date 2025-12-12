@@ -2,3 +2,6 @@ data/
 results_indobertweet/
 **/__pycache__/
 *.pyc
+mlruns/
+.venv/
+

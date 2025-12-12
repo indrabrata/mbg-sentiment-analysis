@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# train_and_export.py
 import os, pandas as pd, torch, argparse, logging, joblib, json
 from datasets import Dataset
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments, DataCollatorWithPadding, pipeline
@@ -7,6 +5,9 @@ from sklearn.metrics import f1_score, precision_recall_fscore_support, accuracy_
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" 
 
 def train_model(train_path, val_path, outdir, model_name="indolem/indobertweet-base-uncased"):
     train_df, val_df = pd.read_csv(train_path), pd.read_csv(val_path)
@@ -20,17 +21,16 @@ def train_model(train_path, val_path, outdir, model_name="indolem/indobertweet-b
 
     args = TrainingArguments(
         output_dir=outdir,
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         save_strategy="epoch",
         learning_rate=3e-5,
         num_train_epochs=4,
-        per_device_train_batch_size=64,
-        per_device_eval_batch_size=128,
-        warmup_ratio=0.1,
+        per_device_train_batch_size=128,
+        per_device_eval_batch_size=256,
+        warmup_ratio=0.2,
         weight_decay=0.01,
-        load_best_model_at_end=True,
-        metric_for_best_model="f1",
-        report_to="none"
+        report_to="none",
+        bf16=True
     )
 
     def compute_metrics(pred):
@@ -78,8 +78,8 @@ def train_model(train_path, val_path, outdir, model_name="indolem/indobertweet-b
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fine-tune IndoBERTweet and export joblib pipeline.")
-    parser.add_argument("--train", default="..data/processed/train.csv")
-    parser.add_argument("--val", default="..data/processed/val.csv")
-    parser.add_argument("--outdir", default="..results_indobertweet")
+    parser.add_argument("--train", default="./data/processed/train.csv")
+    parser.add_argument("--val", default="./data/processed/val.csv")
+    parser.add_argument("--outdir", default="./results_indobertweet")
     args = parser.parse_args()
     train_model(args.train, args.val, args.outdir)

@@ -24,9 +24,9 @@ def split_dataset(input_path: str):
 
     # --- Save hasil ---
     Path("data/processed").mkdir(exist_ok=True)
-    train_path = "data/processed/train.csv"
-    val_path   = "data/processed/val.csv"
-    test_path  = "data/processed/test.csv"
+    train_path = "./data/processed/train.csv"
+    val_path   = "./data/processed/val.csv"
+    test_path  = "./data/processed/test.csv"
 
     pd.DataFrame({"text": X_train, "label": y_train}).to_csv(train_path, index=False)
     pd.DataFrame({"text": X_val, "label": y_val}).to_csv(val_path, index=False)

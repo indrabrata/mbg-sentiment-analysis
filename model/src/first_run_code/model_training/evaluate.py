@@ -58,4 +58,4 @@ def evaluate_model(test_path, model_dir, outdir):
     logging.info(f"✅ Evaluasi selesai. Metrics: {metrics}, files in: {outdir}")
 
 if __name__ == "__main__":
-    evaluate_model("data/processed/test.csv", "results_indobertweet/best_model", "results_indobertweet/eval")
+    evaluate_model("./data/processed/test.csv", "results_indobertweet/best_model", "results_indobertweet/eval")
