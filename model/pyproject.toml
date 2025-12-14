@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "boto3>=1.42.8",
     "datasets>=4.4.1",
     "dvc>=3.64.0",
     "dvc-ssh>=4.2.2",
@@ -12,5 +13,6 @@ dependencies = [
     "pandas>=2.3.3",
     "scikit-learn>=1.8.0",
     "torch>=2.9.1",
+    "torchvision>=0.24.1",
     "transformers[torch]>=4.57.3",
 ]
