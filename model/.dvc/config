@@ -1,5 +1,6 @@
 [core]
     remote = myremote
+    autostage = true
 ['remote "myremote"']
     url = ssh://admin0@103.150.190.9:2222/home/admin0/dataset-mbg-sentiment-analysis
     user = admin0

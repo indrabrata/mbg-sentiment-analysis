@@ -1,73 +1,57 @@
 #!/usr/bin/env python3
-"""
-push_to_mlflow.py
-Register a local trained model to MLflow Model Registry (Minio as backend).
-"""
-
 import argparse
 import os
 import logging
+from pathlib import Path
+
 import mlflow
 from mlflow import MlflowClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 
-# ----------------------------------------------------
-# SETUP MLFLOW + MINIO ENVIRONMENT
-# ----------------------------------------------------
 def setup_mlflow_env():
-    os.environ["MLFLOW_TRACKING_URI"] = os.getenv("MLFLOW_TRACKING_URI", "")
-    os.environ["MLFLOW_TRACKING_USERNAME"] = os.getenv("MLFLOW_TRACKING_USERNAME", "")
-    os.environ["MLFLOW_TRACKING_PASSWORD"] = os.getenv("MLFLOW_TRACKING_PASSWORD", "")
-    os.environ["AWS_ACCESS_KEY_ID"] = os.getenv("MINIO_ACCESS_KEY", "")
-    os.environ["AWS_SECRET_ACCESS_KEY"] = os.getenv("MINIO_SECRET_KEY", "")
-    os.environ["MLFLOW_S3_ENDPOINT_URL"] = os.getenv("MINIO_ENDPOINT", "")
+    os.environ["MLFLOW_TRACKING_URI"] = os.environ["MLFLOW_TRACKING_URI"]
+    os.environ["MLFLOW_TRACKING_USERNAME"] = os.environ["MLFLOW_TRACKING_USERNAME"]
+    os.environ["MLFLOW_TRACKING_PASSWORD"] = os.environ["MLFLOW_TRACKING_PASSWORD"]
 
-    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", ""))
-    logging.info("MLflow tracking configured at %s", mlflow.get_tracking_uri())
+    os.environ["MLFLOW_ENABLE_ARTIFACTS"] = "true"
+
+    for k in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "MLFLOW_S3_ENDPOINT_URL"]:
+        os.environ.pop(k, None)
+
+    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
 
 
-# ----------------------------------------------------
-# PUSH MODEL INTO MLFLOW
-# ----------------------------------------------------
-def push_model(model_dir: str, model_name: str, target_stage: str):
+def push_model(model_dir: str, model_name: str, stage: str):
+    model_dir = Path(model_dir).resolve()
+    if not model_dir.exists():
+        raise FileNotFoundError(model_dir)
+
     client = MlflowClient()
 
-    with mlflow.start_run() as run:
+    with mlflow.start_run(run_name=f"train-{model_name}") as run:
         run_id = run.info.run_id
-        logging.info("MLflow run: %s", run_id)
 
-        mlflow.log_artifacts(model_dir, artifact_path="model")
+        client.log_artifacts(
+            run_id=run_id,
+            local_dir=str(model_dir),
+            artifact_path="model"
+        )
 
         model_uri = f"runs:/{run_id}/model"
-        logging.info("Registering model from %s", model_uri)
+        mv = client.register_model(model_uri, model_name)
 
-        try:
-            mv = mlflow.register_model(model_uri, model_name)
-            logging.info("Model registered as version %s", mv.version)
-        except Exception as e:
-            logging.error("Model registration failed: %s", e)
-            raise
+        client.transition_model_version_stage(
+            name=model_name,
+            version=mv.version,
+            stage=stage,
+            archive_existing_versions=False
+        )
 
-        # transition to stage
-        try:
-            client.transition_model_version_stage(
-                name=model_name,
-                version=mv.version,
-                stage=target_stage,
-                archive_existing_versions=False
-            )
-            logging.info("Transitioned model to stage %s", target_stage)
-        except Exception as e:
-            logging.warning("Stage transition failed: %s", e)
-
-    return mv.version
+        logging.info("Model %s version %s → %s", model_name, mv.version, stage)
 
 
-# ----------------------------------------------------
-# MAIN
-# ----------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_dir", required=True)
@@ -76,5 +60,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     setup_mlflow_env()
-    ver = push_model(args.model_dir, args.model_name, args.stage)
-    logging.info("Model push completed. Version=%s", ver)
+    push_model(args.model_dir, args.model_name, args.stage)

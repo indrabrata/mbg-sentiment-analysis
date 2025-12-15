@@ -1,7 +1,16 @@
-data/
+# Ignore semua file di data
+data/**
+
+# Un-ignore folder
+!data/
+!data/**/
+
+# Un-ignore file DVC
+!data/**/*.dvc
+
+# === Lain-lain ===
 results_indobertweet/
 **/__pycache__/
 *.pyc
 mlruns/
 .venv/
-

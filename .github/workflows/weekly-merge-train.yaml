@@ -42,7 +42,7 @@ jobs:
       - name: Find latest weekly dataset
         id: weekly
         run: |
-          LATEST=$(ls -t model/data/labelled/weekly/*.csv | head -n 1)
+          LATEST=$(ls -t model/data/labeled/weekly/*.csv | head -n 1)
           echo "weekly_file=$LATEST" >> $GITHUB_OUTPUT
 
       - name: DVC add
