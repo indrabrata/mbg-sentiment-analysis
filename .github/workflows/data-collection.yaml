@@ -15,7 +15,6 @@ env:
   TOTAL_DATA: ${{ vars.TOTAL_DATA || '50' }}
 
 jobs:
-
   data-collection:
     runs-on: ubuntu-latest
 
@@ -61,14 +60,12 @@ jobs:
             --tab "LATEST" \
             -l ${{ env.TOTAL_DATA }} \
             --token ${{ secrets.TWITTER_TOKEN }}
-      
+
       - name: Upload scraped RAW data
         uses: actions/upload-artifact@v4
         with:
           name: raw-${{ steps.date.outputs.current_date }}
           path: scrapper/tweets-data/mbg.csv
-
-
 
   data-preprocessing:
     needs: data-collection
@@ -81,34 +78,41 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: raw-${{ needs.data-collection.outputs.current_date }}
-          path: scrapper/tweets-data  
+          path: scrapper/tweets-data
 
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
       - name: Install Python dependencies
+        working-directory: ./model
         run: |
-          pip install pandas emoji
+          uv pip install --system -e .
 
       - name: Preprocess tweet data (cleaned)
+        working-directory: ./model
         run: |
-          python model/src/cleaning/cleaned_text.py \
-            --input scrapper/tweets-data/mbg.csv \
-            --output_dir scrapper/tweets-data
+          python scripts/preprocess_data.py \
+            --input ../scrapper/tweets-data/mbg.csv \
+            --output_dir ../scrapper/tweets-data
 
       - name: Add empty label column (unlabeled dataset)
+        working-directory: ./model
         run: |
-          python model/src/cleaning/add_unlabeled_column.py \
-            --input scrapper/tweets-data/mbg_cleaned.csv \
-            --output_dir scrapper/tweets-data \
+          python scripts/add_label_column.py \
+            --input ../scrapper/tweets-data/mbg_cleaned.csv \
+            --output_dir ../scrapper/tweets-data \
             --date "${{ needs.data-collection.outputs.current_date }}"
 
-      - name: Upload CLEANED UNLABELED data
+      - name: Upload Cleaned Unlabeled data
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: unlabeled-${{ needs.data-collection.outputs.current_date }}
           path: scrapper/tweets-data/mbg_cleaned_unlabeled_${{ needs.data-collection.outputs.current_date }}.csv
-

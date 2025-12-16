@@ -1,16 +1,26 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
-import os, json
+import os
+import json
 from pathlib import Path
 from fastapi.responses import FileResponse, JSONResponse
 import uvicorn
 import mlflow
 import mlflow.pyfunc
+from dotenv import load_dotenv
+
+load_dotenv()
 
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 MLFLOW_EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "mbg-sentiment")
 MODEL_NAME = os.getenv("MLFLOW_MODEL_NAME", None)
 MODEL_STAGE = os.getenv("MLFLOW_MODEL_STAGE", "Production")
+
+API_HOST = os.getenv("API_HOST", "0.0.0.0")
+API_PORT = int(os.getenv("API_PORT", "8000"))
+API_RELOAD = os.getenv("API_RELOAD", "false").lower() == "true"
+
+PREDICTIONS_OUTPUT_DIR = os.getenv("PREDICTIONS_OUTPUT_DIR", "data/predictions")
 
 LABEL_MAP = {
     "LABEL_0": "negative",
@@ -164,3 +174,7 @@ def get_model_info():
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
+
+# Todo : 
+# 1. Create connection to postgres and saved data prediction with needed field
+# 2. Create logging that will showed into the grafana
