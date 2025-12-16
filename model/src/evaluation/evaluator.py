@@ -1,6 +1,7 @@
-#!/usr/bin/env python3
-# evaluate_and_export.py
-import pandas as pd, numpy as np, json, logging, os
+import pandas as pd
+import numpy as np
+import json
+import logging
 from datasets import Dataset
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix, classification_report
@@ -56,6 +57,3 @@ def evaluate_model(test_path, model_dir, outdir):
         plt.close()
 
     logging.info(f"✅ Evaluasi selesai. Metrics: {metrics}, files in: {outdir}")
-
-if __name__ == "__main__":
-    evaluate_model("./data/processed/test.csv", "results_indobertweet/best_model", "results_indobertweet/eval")

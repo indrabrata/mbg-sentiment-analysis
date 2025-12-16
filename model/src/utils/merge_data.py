@@ -40,10 +40,3 @@ def merge_weekly(input_dir, output_dir):
     print("Merged files:", [str(f) for f in selected])
     print("Output saved:", out_file)
     return out_file
-
-
-if __name__ == "__main__":
-    merge_weekly(
-        "./data/labeled/daily",
-        "./data/labeled/weekly"
-    )
