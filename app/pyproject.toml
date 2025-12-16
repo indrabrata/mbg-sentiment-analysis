@@ -9,4 +9,5 @@ dependencies = [
     "mlflow>=2.18.0",
     "boto3>=1.35.0",
     "python-dotenv>=1.0.0",
+    "python-multipart>=0.0.20",
 ]

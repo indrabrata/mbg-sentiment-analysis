@@ -2,7 +2,7 @@ name: Retrain Model
 
 on:
   schedule:
-    - cron: "0 19 * * 0"   # Senin 02:00 WIB
+    - cron: "0 19 * * 0" # Senin 02:00 WIB
   workflow_dispatch:
   jobs:
     retrain-model:

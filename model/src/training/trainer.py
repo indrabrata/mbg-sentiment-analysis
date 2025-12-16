@@ -17,12 +17,13 @@ import pandas as pd
 from datasets import Dataset
 
 import mlflow
-import mlflow.pytorch
+import mlflow.transformers
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
     Trainer,
-    TrainingArguments
+    TrainingArguments,
+    pipeline
 )
 
 from .freezing import freeze_lower_layers
@@ -30,9 +31,6 @@ from .metrics import compute_metrics
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
-BASE_MODEL = "indolem/indobertweet-base-uncased"
-
 
 def load_dataset(csv_path: str) -> Dataset:
     df = pd.read_csv(csv_path)
@@ -121,6 +119,8 @@ def train(args):
 
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"))
     experiment_name = os.getenv("MLFLOW_EXPERIMENT_NAME", "mbg-sentiment-analysis")
+    base_model = os.getenv("BASE_MODEL", "indolem/indobertweet-base-uncased")
+    model_name = os.getenv("MODEL_NAME", "mbg-sentiment-analysis-model")
 
     # Set or create experiment
     try:
@@ -143,9 +143,9 @@ def train(args):
         logging.info(f"📥 Downloaded previous model from MLflow for incremental training")
     else:
         # No previous model, train from scratch
-        model_source = BASE_MODEL
+        model_source = base_model
         is_incremental = False
-        logging.info(f"🆕 Starting fresh training from base model: {BASE_MODEL}")
+        logging.info(f"🆕 Starting fresh training from base model: {base_model}")
 
 
     from datetime import datetime
@@ -155,11 +155,11 @@ def train(args):
     output_dir.mkdir(parents=True, exist_ok=True)
     logging.info(f"📁 Output directory: {output_dir}")
 
-    with mlflow.start_run(run_name="mbg-sentimen-analysis-model"):
+    with mlflow.start_run(run_name="mbg-sentimen-analysis-run"):
 
         # Log experiment config
         mlflow.log_params({
-            "base_model": BASE_MODEL,
+            "base_model": base_model,
             "model_source": model_source,
             "is_incremental": is_incremental,
             "epochs": epochs,
@@ -189,7 +189,7 @@ def train(args):
         logging.info(f"📊 Train size: {len(train_ds_raw)}, Validation size: {len(val_ds_raw)}")
 
 
-        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+        tokenizer = AutoTokenizer.from_pretrained(base_model)
 
         logging.info("📦 Loading model from: %s", model_source)
         model = AutoModelForSequenceClassification.from_pretrained(
@@ -316,11 +316,36 @@ def train(args):
 
 
         try:
-            # Log all model files as artifacts
-            mlflow.log_artifacts(str(output_dir), artifact_path="model")
-            logging.info("✅ Model artifacts logged to MLflow")
+            # Clean up checkpoint directories before logging
+            import shutil
+            for checkpoint_dir in output_dir.glob("checkpoint-*"):
+                if checkpoint_dir.is_dir():
+                    shutil.rmtree(checkpoint_dir)
+                    logging.info(f"🧹 Removed checkpoint directory: {checkpoint_dir.name}")
+
+            # Create a text-classification pipeline for inference
+            sentiment_pipeline = pipeline(
+                "text-classification",
+                model=model,
+                tokenizer=tokenizer,
+                device=-1  # CPU
+            )
+
+            # Log model using MLflow's transformers flavor
+            mlflow.transformers.log_model(
+                transformers_model=sentiment_pipeline,
+                artifact_path="model",
+                registered_model_name=model_name  # Optional: set to register in model registry
+            )
+            logging.info("✅ Model logged to MLflow using transformers flavor")
         except Exception as e:
-            logging.warning(f"⚠️ Could not log model artifacts: {e}")
+            logging.warning(f"⚠️ Could not log model to MLflow: {e}")
+            # Fallback: log as artifacts
+            try:
+                mlflow.log_artifacts(str(output_dir), artifact_path="model")
+                logging.info("⚠️ Logged as artifacts instead")
+            except:
+                pass
 
         logging.info("💾 Model saved to %s", output_dir)
         logging.info("✅ Incremental training finished successfully")

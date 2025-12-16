@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-MLFLOW_EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "mbg-sentiment")
+MLFLOW_EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "mbg-sentiment-analysis")
 MODEL_NAME = os.getenv("MLFLOW_MODEL_NAME", None)
 MODEL_STAGE = os.getenv("MLFLOW_MODEL_STAGE", "Production")
 
