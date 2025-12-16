@@ -147,9 +147,7 @@ def train(args):
         is_incremental = False
         logging.info(f"🆕 Starting fresh training from base model: {BASE_MODEL}")
 
-    # -------------------------
-    # Auto-generate output directory with timestamp
-    # -------------------------
+
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     training_type = "incremental" if is_incremental else "fresh"
@@ -173,9 +171,6 @@ def train(args):
             "validation_split": validation_split
         })
 
-        # -------------------------
-        # Load and split data
-        # -------------------------
         logging.info("📂 Loading training data from: %s", args.train_data)
         full_dataset = load_dataset(args.train_data)
 
@@ -247,9 +242,6 @@ def train(args):
 
         trainer.train()
 
-        # -------------------------
-        # Final evaluation & metrics
-        # -------------------------
         metrics = trainer.evaluate()
         logging.info("📊 Evaluation metrics: %s", metrics)
 
@@ -258,9 +250,6 @@ def train(args):
             if isinstance(v, (int, float)):
                 mlflow.log_metric(k, v)
 
-        # -------------------------
-        # Generate confusion matrix
-        # -------------------------
         try:
             import matplotlib.pyplot as plt
             import seaborn as sns
@@ -303,15 +292,9 @@ def train(args):
         except Exception as e:
             logging.warning(f"⚠️ Could not generate confusion matrix: {e}")
 
-        # -------------------------
-        # Save model locally
-        # -------------------------
         trainer.save_model(output_dir)
         tokenizer.save_pretrained(output_dir)
 
-        # -------------------------
-        # Save metrics summary
-        # -------------------------
         metrics_summary = {
             "accuracy": float(metrics.get("eval_accuracy", 0)),
             "f1_macro": float(metrics.get("eval_f1_macro", 0)),
@@ -331,9 +314,7 @@ def train(args):
         # Log metrics summary as artifact
         mlflow.log_artifact(str(metrics_path))
 
-        # -------------------------
-        # Log model artifacts to MLflow
-        # -------------------------
+
         try:
             # Log all model files as artifacts
             mlflow.log_artifacts(str(output_dir), artifact_path="model")
