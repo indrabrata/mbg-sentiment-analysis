@@ -18,13 +18,26 @@ from src.training.trainer import train
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--train", required=True, help="Training CSV (weekly expert-labelled)")
-    parser.add_argument("--val", required=True, help="Validation CSV")
-    parser.add_argument("--model_dir", required=True, help="Previous model directory")
-    parser.add_argument("--output_dir", required=True, help="Output directory for new model")
-    parser.add_argument("--epochs", type=int, default=2)
-    parser.add_argument("--freeze_layers", type=int, default=6)
+    parser = argparse.ArgumentParser(
+        description="""
+        Automated IndoBERTweet Training Pipeline
+
+        This script automatically:
+        - Checks MLflow for previous models
+        - If no previous model: trains from scratch (fresh training)
+        - If previous model exists: downloads and does incremental training with layer freezing
+        - Splits data into train/validation automatically
+        - Logs all artifacts to MLflow
+        - Saves model with timestamp
+
+        All configuration (epochs, batch_size, freeze_layers, etc.) is in .env file
+        """
+    )
+    parser.add_argument(
+        "--train_data",
+        required=True,
+        help="Path to training CSV (will be split into train/val automatically)"
+    )
 
     args = parser.parse_args()
     train(args)
