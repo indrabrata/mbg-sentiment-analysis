@@ -1,76 +1,61 @@
-name: Retrain Model
+name: Training Model
 
 on:
   schedule:
     - cron: "0 19 * * 0" # Senin 02:00 WIB
   workflow_dispatch:
-  jobs:
-    retrain-model:
-      needs: merge-and-dvc-push
-      runs-on: ubuntu-latest
 
-      steps:
-        - uses: actions/checkout@v4
+jobs:
+  retrain-model:
+    runs-on: ubuntu-latest
 
-        - uses: actions/setup-python@v4
-          with:
-            python-version: "3.11"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-        - name: Install dependencies
-          run: pip install torch transformers datasets scikit-learn mlflow boto3 dvc dvc-ssh pandas
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
 
-        - name: Setup SSH for DVC
-          run: |
-            mkdir -p ~/.ssh
-            echo "${{ secrets.DVC_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-            chmod 700 ~/.ssh/id_rsa
-            ssh-keyscan -p 2222 103.150.190.9 >> ~/.ssh/known_hosts
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install \
+            uv \
+            torch transformers datasets scikit-learn \
+            mlflow boto3 dvc dvc-ssh pandas pytest \
+            seaborn matplotlib emoji
 
-        - name: Configure DVC remote
-          run: |
-            dvc remote modify myremote keyfile ~/.ssh/id_rsa
-            dvc remote modify myremote user admin0
-            dvc remote modify myremote port 2222
-            dvc remote modify myremote ask_password false
+      - name: Setup SSH for DVC
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DVC_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p 2222 103.150.190.9 >> ~/.ssh/known_hosts
 
-        - name: Pull weekly dataset
-          run: |
-            dvc pull "${{ needs.merge-and-dvc-push.outputs.weekly_file }}.dvc"
+      - name: Configure DVC remote
+        run: |
+          dvc remote modify myremote keyfile ~/.ssh/id_rsa
+          dvc remote modify myremote user admin0
+          dvc remote modify myremote port 2222
+          dvc remote modify myremote ask_password false
 
-        - name: Pull latest MLflow model
-          env:
-            MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
-            MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
-            MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
-            AWS_ACCESS_KEY_ID: ${{ secrets.MINIO_ACCESS_KEY }}
-            AWS_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY }}
-            MLFLOW_S3_ENDPOINT_URL: ${{ secrets.MINIO_ENDPOINT }}
-          run: |
-            python model/src/model_training/pull_latest_model.py
+      - name: Pull weekly dataset
+        run: |
+          dvc pull data/weekly/mbg.csv.dvc
 
-        - name: Train new model
-          env:
-            MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
-            MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
-            MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
-            AWS_ACCESS_KEY_ID: ${{ secrets.MINIO_ACCESS_KEY }}
-            AWS_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY }}
-            MLFLOW_S3_ENDPOINT_URL: ${{ secrets.MINIO_ENDPOINT }}
-          run: |
-            python model/src/model_training/train_indobertweet.py \
-              --data "${{ needs.merge-and-dvc-push.outputs.weekly_file }}" \
-              --load_pretrained_from "models/previous" \
-              --output_dir "models/new"
+      - name: Run unit tests (data validation & drift)
+        run: |
+          pytest model/tests/unit
 
-        - name: Push model to MLflow
-          env:
-            MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
-            MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
-            MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
-            AWS_ACCESS_KEY_ID: ${{ secrets.MINIO_ACCESS_KEY }}
-            AWS_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY }}
-            MLFLOW_S3_ENDPOINT_URL: ${{ secrets.MINIO_ENDPOINT }}
-          run: |
-            python model/src/model_training/push_to_mlflow.py \
-              --model_dir "models/new" \
-              --model_name "mbg-bert"
+      - name: Train / Retrain model (hard gate inside trainer)
+        env:
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+          MLFLOW_ENABLE_ARTIFACTS: "true"
+          MIN_F1_MACRO: "0.80" 
+        run: |
+          uv run script/train.py \
+            --train-data data/weekly/mbg.csv
