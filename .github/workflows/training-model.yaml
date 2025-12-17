@@ -33,16 +33,34 @@ jobs:
 
           echo "${{ secrets.DVC_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.DVC_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
 
-          ssh-keyscan -p 2222 103.150.190.9 >> ~/.ssh/known_hosts
+          ssh-keyscan -p 2222 -H 103.150.190.9 >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Pull weekly dataset
+      - name: Configure DVC remote with debug
         run: |
           cd model
-          dvc pull data/weekly/mbg.csv.dvc
+          echo "Current DVC remote config:"
+          dvc remote list -v
 
-      - name: Run unit tests 
+          echo "Configuring DVC remote:"
+          dvc remote modify myremote keyfile ~/.ssh/id_rsa
+          dvc remote modify myremote user admin0
+          dvc remote modify myremote port 2222
+          dvc remote modify myremote ask_password false
+
+          echo "Updated DVC remote config:"
+          dvc remote list -v
+
+      - name: Pull weekly dataset with debug
+        run: |
+          cd model
+          echo "Attempting DVC pull with verbose output..."
+          dvc pull -v data/weekly/mbg.csv.dvc
+
+      - name: Run unit tests
         run: |
           pytest model/tests/unit
 
