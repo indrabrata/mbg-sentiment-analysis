@@ -1,7 +1,7 @@
 import pandas as pd
 from pathlib import Path
 
-DATA_PATH = Path("data/labeled/weekly/mbg.csv")
+DATA_PATH = Path("data/weekly/mbg.csv")
 
 def test_dataset_file_exists():
     assert DATA_PATH.exists(), "Dataset mbg.csv tidak ditemukan"
