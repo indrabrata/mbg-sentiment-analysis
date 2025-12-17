@@ -36,6 +36,7 @@ jobs:
 
       - name: Configure DVC remote
         run: |
+          cd model
           dvc remote modify myremote keyfile ~/.ssh/id_rsa
           dvc remote modify myremote user admin0
           dvc remote modify myremote port 2222
@@ -43,19 +44,20 @@ jobs:
 
       - name: Pull weekly dataset
         run: |
+          cd model
           dvc pull data/weekly/mbg.csv.dvc
+
 
       - name: Run unit tests (data validation & drift)
         run: |
           pytest model/tests/unit
 
-      - name: Train / Retrain model (hard gate inside trainer)
+      - name: Train / Retrain model
         env:
           MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
           MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
           MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
-          MLFLOW_ENABLE_ARTIFACTS: "true"
-          MIN_F1_MACRO: "0.80" 
+          MIN_F1_MACRO: "0.80"
         run: |
-          uv run script/train.py \
-            --train-data data/weekly/mbg.csv
+          cd model
+          python script/train.py --train-data data/weekly/mbg.csv
