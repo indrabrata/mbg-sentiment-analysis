@@ -34,6 +34,21 @@ jobs:
           ssh-keyscan -p 2222 103.150.190.9 >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
+          cat > ~/.ssh/config << EOF
+          Host dvc-remote
+            HostName 103.150.190.9
+            User admin0
+            Port 2222
+            IdentityFile ~/.ssh/dvc_id_rsa
+            StrictHostKeyChecking yes
+            IdentitiesOnly yes
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Test SSH connection
+        run: |
+          ssh -T dvc-remote "echo 'SSH connection successful'" || (echo "SSH connection failed" && exit 1)
+
       - name: Configure DVC remote
         run: |
           cd model

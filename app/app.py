@@ -93,33 +93,22 @@ def load_model():
         model_uri = f"runs:/{run_id}/model"
         print(f"Loading model from latest run: {run_id}")
 
-        # Try loading with transformers flavor first (since we log with that flavor)
-        try:
-            MODEL_PIPELINE = mlflow.transformers.load_model(model_uri)
-            print(f"✅ Model loaded using transformers flavor")
-        except Exception as tf_error:
-            print(f"⚠️ Transformers flavor failed: {tf_error}")
-            print("Trying pyfunc flavor...")
-            try:
-                MODEL_PIPELINE = mlflow.pyfunc.load_model(model_uri)
-                print(f"✅ Model loaded using pyfunc flavor")
-            except Exception as pyfunc_error:
-                print(f"⚠️ Pyfunc flavor also failed: {pyfunc_error}")
-                print("Trying direct artifact download and local loading...")
+        # Download artifacts once to avoid multiple downloads
+        import tempfile
+        from transformers import pipeline as hf_pipeline
 
-                # Download artifacts to local directory and load from there
-                import tempfile
-                from transformers import pipeline as hf_pipeline
+        print("Downloading model artifacts...")
+        temp_dir = tempfile.mkdtemp()
+        model_path = mlflow.artifacts.download_artifacts(
+            artifact_uri=model_uri,
+            dst_path=temp_dir
+        )
+        print(f"✅ Artifacts downloaded to: {model_path}")
 
-                temp_dir = tempfile.mkdtemp()
-                model_path = mlflow.artifacts.download_artifacts(
-                    artifact_uri=model_uri,
-                    dst_path=temp_dir
-                )
-
-                # Load the model directly using transformers
-                MODEL_PIPELINE = hf_pipeline("text-classification", model=model_path)
-                print(f"✅ Model loaded from downloaded artifacts at: {model_path}")
+        # Now try loading with the downloaded artifacts
+        # Load the model directly using transformers pipeline
+        MODEL_PIPELINE = hf_pipeline("text-classification", model=model_path)
+        print(f"✅ Model loaded successfully")
 
         MODEL_METADATA["source"] = "mlflow_run"
         MODEL_METADATA["run_id"] = run_id
