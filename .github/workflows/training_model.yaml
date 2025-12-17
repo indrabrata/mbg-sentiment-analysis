@@ -20,7 +20,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requirements.txt
+          pip install --upgrade pip
+          pip install -r model/requirements.txt
 
       - name: Setup SSH for DVC
         run: |
