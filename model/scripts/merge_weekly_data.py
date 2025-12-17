@@ -14,8 +14,8 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Merge weekly labeled data")
-    parser.add_argument("--input_dir", default="./data/labeled/daily")
-    parser.add_argument("--output_dir", default="./data/labeled/weekly")
+    parser.add_argument("--input_dir", default="./data/daily")
+    parser.add_argument("--output_dir", default="./data/weekly")
 
     args = parser.parse_args()
     merge_weekly(args.input_dir, args.output_dir)

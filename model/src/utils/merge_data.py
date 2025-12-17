@@ -36,13 +36,20 @@ def merge_weekly(input_dir, output_dir):
         raise ValueError(f"Dataset harus mengandung kolom {required_cols}")
 
     before = len(merged)
+
+    # 1️⃣ Drop unlabeled
     merged = merged.dropna(subset=["label"])
     after_dropna = len(merged)
 
+    # 2️⃣ Cast awal
     merged["label"] = merged["label"].astype(int)
 
+    # 3️⃣ Valid range
     merged = merged[merged["label"].isin([0, 1, 2])]
     after_range = len(merged)
+
+    # 🔥 4️⃣ KUNCI SCHEMA (INI KUNCI LOLOS PYTEST)
+    merged["label"] = merged["label"].astype("int64")
 
     print(f"Rows before cleaning : {before}")
     print(f"After dropna(label)  : {after_dropna}")
