@@ -47,7 +47,6 @@ jobs:
           cd model
           dvc pull data/weekly/mbg.csv.dvc
 
-
       - name: Run unit tests (data validation & drift)
         run: |
           pytest model/tests/unit
