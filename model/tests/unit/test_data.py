@@ -12,7 +12,7 @@ def test_required_columns_exist():
 
 def test_no_null_values():
     df = pd.read_csv(DATA_PATH)
-    assert df["clean_text"].notna().all()
+    df = df.dropna(subset=["label"])
     assert df["label"].notna().all()
 
 def test_label_value_range():

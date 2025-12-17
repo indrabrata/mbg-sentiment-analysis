@@ -8,7 +8,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from model.src.utils.merge_data import merge_weekly
+from src.utils.merge_data import merge_weekly
 
 if __name__ == "__main__":
     import argparse
