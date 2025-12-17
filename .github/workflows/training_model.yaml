@@ -26,9 +26,13 @@ jobs:
       - name: Setup SSH for DVC
         run: |
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
           echo "${{ secrets.DVC_SSH_PRIVATE_KEY }}" > ~/.ssh/dvc_id_rsa
           chmod 600 ~/.ssh/dvc_id_rsa
-          ssh-keyscan -p 2222 103.150.190.9 >> ~/.ssh/dvc_id_rsa
+
+          ssh-keyscan -p 2222 103.150.190.9 >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
       - name: Configure DVC remote
         run: |
