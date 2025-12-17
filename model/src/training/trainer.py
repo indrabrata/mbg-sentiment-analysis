@@ -5,6 +5,7 @@ Incremental fine-tuning IndoBERTweet with expert-labelled weekly data
 + partial layer freezing
 + evaluation (accuracy, F1-macro)
 + MLflow metric logging
++ model performance gate BEFORE MLflow model logging
 """
 
 import os
@@ -29,8 +30,9 @@ from transformers import (
 from .freezing import freeze_lower_layers
 from .metrics import compute_metrics
 
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+MIN_F1_MACRO = float(os.getenv("MIN_F1_MACRO", "0.80"))
 
 def load_dataset(csv_path: str) -> Dataset:
     df = pd.read_csv(csv_path)
@@ -56,7 +58,6 @@ def tokenize_dataset(ds: Dataset, tokenizer, max_length: int = 128):
         batched=True
     )
 
-
 def check_previous_model_exists(experiment_name: str) -> tuple:
     """
     Check if there's a previous model in MLflow experiment.
@@ -66,41 +67,30 @@ def check_previous_model_exists(experiment_name: str) -> tuple:
         from mlflow.tracking import MlflowClient
 
         client = MlflowClient()
-
-        # Get experiment
         experiment = client.get_experiment_by_name(experiment_name)
+
         if not experiment:
-            logging.info("📭 No previous experiment found. Starting fresh training.")
             return False, None
 
-        # Search for runs with logged models
         runs = client.search_runs(
             experiment_ids=[experiment.experiment_id],
-            filter_string="",
             order_by=["start_time DESC"],
             max_results=1
         )
 
         if not runs:
-            logging.info("📭 No previous runs found. Starting fresh training.")
             return False, None
 
-        latest_run = runs[0]
-        run_id = latest_run.info.run_id
-
-        # Check if this run has model artifacts
+        run_id = runs[0].info.run_id
         artifacts = client.list_artifacts(run_id, path="model")
+
         if not artifacts:
-            logging.info("📭 No model artifacts in latest run. Starting fresh training.")
             return False, None
 
-        # Model exists, return the URI
-        model_uri = f"runs:/{run_id}/model"
-        logging.info(f"✅ Found previous model: {model_uri}")
-        return True, model_uri
+        return True, f"runs:/{run_id}/model"
 
     except Exception as e:
-        logging.warning(f"⚠️ Error checking for previous model: {e}")
+        logging.warning(f"⚠️ Error checking previous model: {e}")
         return False, None
 
 
@@ -116,23 +106,16 @@ def train(args):
     validation_split = float(os.getenv("VALIDATION_SPLIT", "0.2"))
     num_labels = int(os.getenv("NUM_LABELS", "3"))
 
-
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"))
     experiment_name = os.getenv("MLFLOW_EXPERIMENT_NAME", "mbg-sentiment-analysis")
     base_model = os.getenv("BASE_MODEL", "indolem/indobertweet-base-uncased")
     model_name = os.getenv("MODEL_NAME", "mbg-sentiment-analysis-model")
 
-    # Set or create experiment
-    try:
-        mlflow.set_experiment(experiment_name)
-    except Exception as e:
-        logging.warning(f"Could not set experiment: {e}")
+    mlflow.set_experiment(experiment_name)
 
- 
     has_previous_model, previous_model_uri = check_previous_model_exists(experiment_name)
 
     if has_previous_model:
-        # Download previous model from MLflow
         import tempfile
         temp_dir = tempfile.mkdtemp()
         model_source = mlflow.artifacts.download_artifacts(
@@ -140,58 +123,44 @@ def train(args):
             dst_path=temp_dir
         )
         is_incremental = True
-        logging.info(f"📥 Downloaded previous model from MLflow for incremental training")
     else:
-        # No previous model, train from scratch
         model_source = base_model
         is_incremental = False
-        logging.info(f"🆕 Starting fresh training from base model: {base_model}")
-
 
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     training_type = "incremental" if is_incremental else "fresh"
     output_dir = Path(f"models/{training_type}_{timestamp}")
     output_dir.mkdir(parents=True, exist_ok=True)
-    logging.info(f"📁 Output directory: {output_dir}")
 
-    with mlflow.start_run(run_name="mbg-sentimen-analysis-run"):
+    with mlflow.start_run(run_name="mbg-sentiment-analysis-train"):
 
-        # Log experiment config
         mlflow.log_params({
             "base_model": base_model,
-            "model_source": model_source,
             "is_incremental": is_incremental,
             "epochs": epochs,
             "learning_rate": learning_rate,
             "freeze_layers": freeze_layers if is_incremental else 0,
             "batch_size": batch_size,
-            "max_length": max_length,
-            "weight_decay": weight_decay,
             "validation_split": validation_split
         })
 
-        logging.info("📂 Loading training data from: %s", args.train_data)
+
         full_dataset = load_dataset(args.train_data)
 
-        # Split into train and validation
         from sklearn.model_selection import train_test_split
-        train_indices, val_indices = train_test_split(
+        train_idx, val_idx = train_test_split(
             range(len(full_dataset)),
             test_size=validation_split,
             random_state=42,
-            stratify=full_dataset["label"]  # Stratified split to maintain label distribution
+            stratify=full_dataset["label"]
         )
-
-        train_ds_raw = full_dataset.select(train_indices)
-        val_ds_raw = full_dataset.select(val_indices)
-
-        logging.info(f"📊 Train size: {len(train_ds_raw)}, Validation size: {len(val_ds_raw)}")
-
 
         tokenizer = AutoTokenizer.from_pretrained(base_model)
 
-        logging.info("📦 Loading model from: %s", model_source)
+        train_ds = tokenize_dataset(full_dataset.select(train_idx), tokenizer, max_length)
+        val_ds = tokenize_dataset(full_dataset.select(val_idx), tokenizer, max_length)
+
         model = AutoModelForSequenceClassification.from_pretrained(
             model_source,
             num_labels=num_labels
@@ -199,153 +168,63 @@ def train(args):
 
         if is_incremental and freeze_layers > 0:
             freeze_lower_layers(model, freeze_layers)
-            logging.info("🔒 Incremental training mode: %d layers frozen", freeze_layers)
-        else:
-            logging.info("🆕 Fresh training mode: all layers trainable")
-
-
-        train_ds = tokenize_dataset(train_ds_raw, tokenizer, max_length)
-        val_ds = tokenize_dataset(val_ds_raw, tokenizer, max_length)
-
-
-        training_args = TrainingArguments(
-            output_dir=str(output_dir),
-            overwrite_output_dir=True,
-
-            learning_rate=learning_rate,
-            weight_decay=weight_decay,
-            num_train_epochs=epochs,
-            per_device_train_batch_size=batch_size,
-            per_device_eval_batch_size=batch_size,
-
-            eval_strategy="epoch",
-            save_strategy="epoch",
-            save_total_limit=1,
-
-            load_best_model_at_end=True,
-            metric_for_best_model="f1_macro",
-            greater_is_better=True,
-
-            logging_steps=50,
-            report_to="none"
-        )
 
         trainer = Trainer(
             model=model,
-            args=training_args,
+            args=TrainingArguments(
+                output_dir=str(output_dir),
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+                num_train_epochs=epochs,
+                per_device_train_batch_size=batch_size,
+                per_device_eval_batch_size=batch_size,
+                eval_strategy="epoch",
+                save_strategy="epoch",
+                load_best_model_at_end=True,
+                metric_for_best_model="f1_macro",
+                greater_is_better=True,
+                report_to="none"
+            ),
             train_dataset=train_ds,
             eval_dataset=val_ds,
-            tokenizer=tokenizer,
             compute_metrics=compute_metrics
         )
-
 
         trainer.train()
 
         metrics = trainer.evaluate()
         logging.info("📊 Evaluation metrics: %s", metrics)
 
-        # Log metrics to MLflow
         for k, v in metrics.items():
             if isinstance(v, (int, float)):
                 mlflow.log_metric(k, v)
 
-        try:
-            import matplotlib.pyplot as plt
-            import seaborn as sns
-            from sklearn.metrics import confusion_matrix
+        eval_f1 = float(metrics.get("eval_f1_macro", 0.0))
 
-            # Get predictions for confusion matrix
-            predictions = trainer.predict(val_ds)
-            y_pred = np.argmax(predictions.predictions, axis=1)
-            y_true = predictions.label_ids
-
-            # Create confusion matrix
-            cm = confusion_matrix(y_true, y_pred)
-
-            # Plot confusion matrix
-            plt.figure(figsize=(8, 6))
-            sns.heatmap(
-                cm,
-                annot=True,
-                fmt="d",
-                xticklabels=["Negative", "Neutral", "Positive"],
-                yticklabels=["Negative", "Neutral", "Positive"],
-                cmap="Blues"
+        if eval_f1 < MIN_F1_MACRO:
+            mlflow.log_param("model_accepted", False)
+            mlflow.set_tag("model_status", "rejected")
+            logging.error(
+                "❌ Model rejected: eval_f1_macro=%.4f < threshold=%.2f",
+                eval_f1,
+                MIN_F1_MACRO
             )
-            plt.title("Confusion Matrix")
-            plt.ylabel("True Label")
-            plt.xlabel("Predicted Label")
-            plt.tight_layout()
+            return  
 
-            # Save and log confusion matrix
-            cm_path = "confusion_matrix.png"
-            plt.savefig(cm_path)
-            mlflow.log_artifact(cm_path)
-            plt.close()
+        mlflow.log_param("model_accepted", True)
+        mlflow.set_tag("model_status", "accepted")
 
-            # Remove temporary file
-            if os.path.exists(cm_path):
-                os.remove(cm_path)
+        sentiment_pipeline = pipeline(
+            "text-classification",
+            model=model,
+            tokenizer=tokenizer,
+            device=-1
+        )
 
-            logging.info("✅ Confusion matrix logged to MLflow")
-        except Exception as e:
-            logging.warning(f"⚠️ Could not generate confusion matrix: {e}")
+        mlflow.transformers.log_model(
+            transformers_model=sentiment_pipeline,
+            artifact_path="model",
+            registered_model_name=model_name
+        )
 
-        trainer.save_model(output_dir)
-        tokenizer.save_pretrained(output_dir)
-
-        metrics_summary = {
-            "accuracy": float(metrics.get("eval_accuracy", 0)),
-            "f1_macro": float(metrics.get("eval_f1_macro", 0)),
-            "loss": float(metrics.get("eval_loss", 0)),
-            "epochs": epochs,
-            "learning_rate": learning_rate,
-            "batch_size": batch_size,
-            "freeze_layers": freeze_layers if is_incremental else 0,
-            "is_incremental": is_incremental,
-            "training_type": training_type
-        }
-
-        metrics_path = output_dir / "training_metrics.json"
-        with open(metrics_path, "w") as f:
-            json.dump(metrics_summary, f, indent=2)
-
-        # Log metrics summary as artifact
-        mlflow.log_artifact(str(metrics_path))
-
-
-        try:
-            # Clean up checkpoint directories before logging
-            import shutil
-            for checkpoint_dir in output_dir.glob("checkpoint-*"):
-                if checkpoint_dir.is_dir():
-                    shutil.rmtree(checkpoint_dir)
-                    logging.info(f"🧹 Removed checkpoint directory: {checkpoint_dir.name}")
-
-            # Create a text-classification pipeline for inference
-            sentiment_pipeline = pipeline(
-                "text-classification",
-                model=model,
-                tokenizer=tokenizer,
-                device=-1  # CPU
-            )
-
-            # Log model using MLflow's transformers flavor
-            mlflow.transformers.log_model(
-                transformers_model=sentiment_pipeline,
-                artifact_path="model",
-                registered_model_name=model_name  # Optional: set to register in model registry
-            )
-            logging.info("✅ Model logged to MLflow using transformers flavor")
-        except Exception as e:
-            logging.warning(f"⚠️ Could not log model to MLflow: {e}")
-            # Fallback: log as artifacts
-            try:
-                mlflow.log_artifacts(str(output_dir), artifact_path="model")
-                logging.info("⚠️ Logged as artifacts instead")
-            except:
-                pass
-
-        logging.info("💾 Model saved to %s", output_dir)
-        logging.info("✅ Incremental training finished successfully")
+        logging.info("✅ Model logged to MLflow (accepted)")
