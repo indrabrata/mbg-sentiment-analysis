@@ -7,9 +7,19 @@ from fastapi.responses import FileResponse, JSONResponse
 import uvicorn
 import mlflow
 import mlflow.pyfunc
+import mlflow.transformers
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Configure AWS/S3 credentials for MLflow artifact storage
+# These MUST be set if MLflow uses remote artifact storage (S3/MinIO)
+if os.getenv("AWS_ACCESS_KEY_ID"):
+    os.environ["AWS_ACCESS_KEY_ID"] = os.getenv("AWS_ACCESS_KEY_ID")
+if os.getenv("AWS_SECRET_ACCESS_KEY"):
+    os.environ["AWS_SECRET_ACCESS_KEY"] = os.getenv("AWS_SECRET_ACCESS_KEY")
+if os.getenv("MLFLOW_S3_ENDPOINT_URL"):
+    os.environ["MLFLOW_S3_ENDPOINT_URL"] = os.getenv("MLFLOW_S3_ENDPOINT_URL")
 
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 MLFLOW_EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "mbg-sentiment-analysis")
@@ -82,7 +92,35 @@ def load_model():
         run_id = latest_run.info.run_id
         model_uri = f"runs:/{run_id}/model"
         print(f"Loading model from latest run: {run_id}")
-        MODEL_PIPELINE = mlflow.pyfunc.load_model(model_uri)
+
+        # Try loading with transformers flavor first (since we log with that flavor)
+        try:
+            MODEL_PIPELINE = mlflow.transformers.load_model(model_uri)
+            print(f"✅ Model loaded using transformers flavor")
+        except Exception as tf_error:
+            print(f"⚠️ Transformers flavor failed: {tf_error}")
+            print("Trying pyfunc flavor...")
+            try:
+                MODEL_PIPELINE = mlflow.pyfunc.load_model(model_uri)
+                print(f"✅ Model loaded using pyfunc flavor")
+            except Exception as pyfunc_error:
+                print(f"⚠️ Pyfunc flavor also failed: {pyfunc_error}")
+                print("Trying direct artifact download and local loading...")
+
+                # Download artifacts to local directory and load from there
+                import tempfile
+                from transformers import pipeline as hf_pipeline
+
+                temp_dir = tempfile.mkdtemp()
+                model_path = mlflow.artifacts.download_artifacts(
+                    artifact_uri=model_uri,
+                    dst_path=temp_dir
+                )
+
+                # Load the model directly using transformers
+                MODEL_PIPELINE = hf_pipeline("text-classification", model=model_path)
+                print(f"✅ Model loaded from downloaded artifacts at: {model_path}")
+
         MODEL_METADATA["source"] = "mlflow_run"
         MODEL_METADATA["run_id"] = run_id
         MODEL_METADATA["experiment_name"] = MLFLOW_EXPERIMENT_NAME
