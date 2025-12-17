@@ -37,7 +37,7 @@ jobs:
       - name: Configure DVC remote
         run: |
           cd model
-          dvc remote modify myremote keyfile ~/.ssh/id_rsa
+          dvc remote modify myremote keyfile ~/.ssh/dvc_id_rsa
           dvc remote modify myremote user admin0
           dvc remote modify myremote port 2222
           dvc remote modify myremote ask_password false
