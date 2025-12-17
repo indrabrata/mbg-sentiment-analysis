@@ -72,4 +72,4 @@ jobs:
           MIN_F1_MACRO: "0.80"
         run: |
           cd model
-          python script/train.py --train-data data/weekly/mbg.csv
+          python scripts/train.py --train-data data/weekly/mbg.csv
