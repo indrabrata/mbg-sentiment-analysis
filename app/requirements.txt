@@ -218,7 +218,7 @@ python-multipart==0.0.21
     # via app (pyproject.toml)
 pytz==2025.2
     # via pandas
-pywin32==311
+# pywin32==311  # Windows-only package - removed for Docker Linux containers
     # via docker
 pyyaml==6.0.3
     # via

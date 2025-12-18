@@ -153,7 +153,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-posgtres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgressecretpassword}
       POSTGRES_DB: sentiment-analysis
       # API Configuration
       API_HOST: 0.0.0.0
