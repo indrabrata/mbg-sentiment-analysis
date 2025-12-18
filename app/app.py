@@ -12,6 +12,7 @@ from logging_config import setup_logging, get_logger
 from middleware import RequestLoggingMiddleware
 from endpoints import router
 from model_loader import load_model
+from database import test_connection
 
 # Setup logging
 setup_logging()
@@ -26,6 +27,14 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Application starting up", extra={"event": "startup"})
     try:
+        # Test database connection
+        logger.info("Testing database connection...", extra={"event": "db_test"})
+        if test_connection():
+            logger.info("✅ Database connection successful", extra={"event": "db_connected"})
+        else:
+            logger.warning("⚠️ Database connection failed - predictions won't be saved", extra={"event": "db_not_connected"})
+
+        # Load ML model
         load_model()
         logger.info("Application startup completed successfully", extra={"event": "startup_complete"})
     except Exception as e:

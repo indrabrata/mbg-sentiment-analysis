@@ -39,6 +39,13 @@ LOG_FORMAT = os.getenv("LOG_FORMAT", "json")
 # Prediction Configuration
 PREDICTIONS_OUTPUT_DIR = os.getenv("PREDICTIONS_OUTPUT_DIR", "data/predictions")
 
+# PostgreSQL Configuration
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
+POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgressecretpassword")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "sentiment-analysis")
+
 # Label Mapping
 LABEL_MAP = {
     "LABEL_0": "negative",

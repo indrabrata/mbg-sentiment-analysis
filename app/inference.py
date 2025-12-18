@@ -30,21 +30,13 @@ def predict_single(text: str, request_id: Optional[str] = None) -> dict:
     model_pipeline = get_model()
 
     try:
-        # Handle both PyFunc wrapper and direct pipeline
-        if hasattr(model_pipeline, 'predict'):
-            # MLflow PyFunc wrapper - accepts list of strings or DataFrame
-            result = model_pipeline.predict([text])
+        # Call the transformers pipeline directly
+        # mlflow.transformers.load_model() returns a transformers pipeline
+        result = model_pipeline(text)
 
-            # Normalize output to list of dicts format
-            if isinstance(result, pd.DataFrame):
-                result = result.to_dict('records')
-            elif isinstance(result, dict):
-                result = [result]
-            elif not isinstance(result, list):
-                result = [{"label": str(result[0]) if hasattr(result, '__getitem__') else str(result), "score": 1.0}]
-        else:
-            # Direct transformers pipeline
-            result = model_pipeline(text)
+        # Result should be a list of dicts: [{"label": "LABEL_X", "score": 0.xx}]
+        if not isinstance(result, list):
+            result = [result]
 
         inference_time_ms = (time.time() - start_time) * 1000
 

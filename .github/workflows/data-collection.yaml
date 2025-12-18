@@ -102,6 +102,34 @@ jobs:
             --input ../scrapper/tweets-data/mbg.csv \
             --output_dir ../scrapper/tweets-data
 
+      - name: Predict sentiment using ML model
+        working-directory: ./scrapper/tweets-data
+        run: |
+          echo "🤖 Sending tweets to sentiment analysis API..."
+
+          # Call the sentiment app API
+          curl -X POST "https://mlops-app.cupcakez.my.id/predict-batch-tweet" \
+            -H "Content-Type: multipart/form-data" \
+            -F "file=@mbg_cleaned.csv" \
+            -o "mbg_predictions_${{ needs.data-collection.outputs.current_date }}.csv" \
+            --fail-with-body \
+            --max-time 600
+
+          echo "✅ Sentiment predictions completed"
+
+          # Show prediction summary
+          if [ -f "mbg_predictions_${{ needs.data-collection.outputs.current_date }}.csv" ]; then
+            echo "📊 Prediction Statistics:"
+            python3 -c "
+          import pandas as pd
+          df = pd.read_csv('mbg_predictions_${{ needs.data-collection.outputs.current_date }}.csv')
+          print(f'Total predictions: {len(df)}')
+          print(f'\\nSentiment distribution:')
+          print(df['pred_label'].value_counts())
+          print(f'\\nAverage confidence: {df[\"pred_score\"].mean():.4f}')
+          "
+          fi
+
       - name: Add empty label column (unlabeled dataset)
         working-directory: ./model
         run: |

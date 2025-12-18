@@ -39,6 +39,13 @@ def load_model():
     global MODEL_PIPELINE
     MODEL_METADATA["loaded_at"] = datetime.now().isoformat()
 
+    # Log S3/MinIO configuration for debugging
+    import os
+    s3_endpoint = os.getenv("MLFLOW_S3_ENDPOINT_URL", "NOT SET")
+    aws_key = os.getenv("AWS_ACCESS_KEY_ID", "NOT SET")
+    logger.info(f"🔧 S3 Endpoint: {s3_endpoint}", extra={"event": "s3_config"})
+    logger.info(f"🔧 AWS Access Key: {aws_key[:10] if aws_key != 'NOT SET' else 'NOT SET'}...", extra={"event": "s3_config"})
+
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     logger.info(f"Connecting to MLflow at: {MLFLOW_TRACKING_URI}", extra={
         "event": "mlflow_connect",
@@ -146,25 +153,32 @@ def _load_from_latest_run():
             "experiment_name": MLFLOW_EXPERIMENT_NAME
         })
 
-        # Load the model using MLflow's pyfunc loader (more robust for remote stores)
-        logger.info("Loading model using mlflow.pyfunc.load_model...", extra={
+        # First check if model artifacts exist (like trainer does)
+        logger.info("Checking for model artifacts...", extra={
+            "event": "artifacts_check",
+            "run_id": run_id
+        })
+
+        artifacts = client.list_artifacts(run_id, path="model")
+        if not artifacts:
+            raise RuntimeError(f"No model artifacts found in run {run_id}. Please train the model first.")
+
+        logger.info(f"✅ Found {len(artifacts)} model artifacts:", extra={
+            "event": "artifacts_found",
+            "artifact_count": len(artifacts),
+            "run_id": run_id
+        })
+        for artifact in artifacts[:10]:  # Log first 10
+            logger.info(f"   - {artifact.path}")
+
+        # Load using transformers loader (matching the training log method)
+        logger.info("Loading model using mlflow.transformers.load_model...", extra={
             "event": "model_load_in_progress",
             "run_id": run_id,
             "model_uri": model_uri
         })
 
-        # First check if model artifact exists
-        artifacts = client.list_artifacts(run_id, path="model")
-        if not artifacts:
-            raise RuntimeError(f"No model artifacts found in run {run_id}")
-
-        logger.info(f"Found {len(artifacts)} model artifacts", extra={
-            "event": "artifacts_found",
-            "artifact_count": len(artifacts),
-            "run_id": run_id
-        })
-
-        pipeline = mlflow.pyfunc.load_model(model_uri)
+        pipeline = mlflow.transformers.load_model(model_uri)
 
         MODEL_METADATA["source"] = "mlflow_run"
         MODEL_METADATA["run_id"] = run_id

@@ -134,30 +134,43 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # sentiment-app:
-  #   image: ghcr.io/${GITHUB_REPOSITORY:-indrabrata/mbg-sentiment-analysis}/mbg-sentiment-analysis-app:latest
-  #   container_name: mlflow-sentiment-app
-  #   environment:
-  #     MLFLOW_TRACKING_URI: http://mlflow:5000
-  #     MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-mbg-sentiment-analysis}
-  #     MLFLOW_MODEL_NAME: ${MLFLOW_MODEL_NAME:-}
-  #     MLFLOW_MODEL_STAGE: ${MLFLOW_MODEL_STAGE:-Production}
-  #     AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-  #     AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-  #     MLFLOW_S3_ENDPOINT_URL: http://minio:9000
-  #     API_HOST: 0.0.0.0
-  #     API_PORT: 8000
-  #   networks:
-  #     - mlflow-network
-  #   depends_on:
-  #     mlflow:
-  #       condition: service_healthy
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8000/model_info"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #   restart: unless-stopped
+  sentiment-app:
+    image: ghcr.io/${GITHUB_REPOSITORY:-indrabrata/mbg-sentiment-analysis}/mbg-sentiment-analysis-app:latest
+    container_name: mlflow-sentiment-app
+    environment:
+      # MLflow Configuration
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_TRACKING_USERNAME: ${MLFLOW_TRACKING_USERNAME:-admin}
+      MLFLOW_TRACKING_PASSWORD: ${MLFLOW_TRACKING_PASSWORD:-password}
+      MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-mbg-sentiment-analysis}
+      MLFLOW_MODEL_NAME: ${MLFLOW_MODEL_NAME:-}
+      MLFLOW_MODEL_STAGE: ${MLFLOW_MODEL_STAGE:-Production}
+      # S3/MinIO Configuration
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      # PostgreSQL Configuration
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-posgtres}
+      POSTGRES_DB: sentiment-analysis
+      # API Configuration
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+    networks:
+      - mlflow-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
@@ -174,7 +187,7 @@ services:
       - pgadmin
       - minio
       - grafana
-      # - sentiment-app
+      - sentiment-app
     restart: unless-stopped
 
 networks:

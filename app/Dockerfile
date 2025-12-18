@@ -24,6 +24,7 @@ COPY model_loader.py ./
 COPY inference.py ./
 COPY middleware.py ./
 COPY endpoints.py ./
+COPY database.py ./
 COPY app.py ./
 
 # Copy .env file if exists (optional)
