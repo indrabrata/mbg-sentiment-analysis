@@ -19,8 +19,6 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: "model/requirements.txt"
 
       - name: Install dependencies
         run: |
@@ -32,10 +30,12 @@ jobs:
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          echo "${{ secrets.VM_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.DVC_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.DVC_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          ssh-keyscan -p ${{ secrets.VM_PORT }} -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -p 2222 -H 103.150.190.9 >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
       - name: Configure DVC remote with debug
@@ -46,8 +46,8 @@ jobs:
 
           echo "Configuring DVC remote:"
           dvc remote modify myremote keyfile ~/.ssh/id_rsa
-          dvc remote modify myremote user ${{ secrets.VM_USERNAME }}
-          dvc remote modify myremote port ${{ secrets.VM_PORT }}
+          dvc remote modify myremote user admin0
+          dvc remote modify myremote port 2222
           dvc remote modify myremote ask_password false
 
           echo "Updated DVC remote config:"
@@ -68,7 +68,7 @@ jobs:
           MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
           MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
           MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
-          MIN_F1_MACRO: ${{ vars.MIN_F1_SCORE }}
+          MIN_F1_MACRO: "0.70"
         run: |
           cd model
           python scripts/train.py --train_data data/weekly/mbg.csv

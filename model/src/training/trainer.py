@@ -367,6 +367,7 @@ def train(args):
             try:
                 # Log all model files as artifacts
                 mlflow.log_artifacts(str(output_dir), artifact_path="model")
+
                 logging.info("✅ Model artifacts logged to MLflow")
             except Exception as e:
                 logging.warning(f"⚠️ Could not log model artifacts: {e}")
