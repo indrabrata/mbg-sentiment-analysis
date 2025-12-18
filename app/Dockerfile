@@ -27,8 +27,8 @@ COPY endpoints.py ./
 COPY database.py ./
 COPY app.py ./
 
-# Copy .env file if exists (optional)
-COPY .env* ./ 2>/dev/null || true
+# Note: .env files should be passed as environment variables in production
+# The line below is commented out - use docker run -e or docker-compose environment
 
 # Create data directory for predictions
 RUN mkdir -p data/predictions
