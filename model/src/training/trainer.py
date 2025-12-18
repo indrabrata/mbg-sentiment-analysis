@@ -124,27 +124,37 @@ def train(args):
     has_previous_model, previous_model_uri = check_previous_model_exists(experiment_name)
 
     if has_previous_model:
-        import tempfile
-        temp_dir = tempfile.mkdtemp()
-        model_source = mlflow.artifacts.download_artifacts(
-            artifact_uri=previous_model_uri,
-            dst_path=temp_dir
-        )
-        is_incremental = True
-        logging.info(f"📥 Using previous model for incremental training")
+        try:
+            logging.info(f"📥 Loading previous model from MLflow for incremental training...")
+            logging.info(f"   Model URI: {previous_model_uri}")
+
+            # Load the previous model pipeline from MLflow
+            previous_pipeline = mlflow.transformers.load_model(previous_model_uri)
+
+            # Extract the model and tokenizer from the pipeline
+            previous_model = previous_pipeline.model
+            previous_tokenizer = previous_pipeline.tokenizer
+
+            is_incremental = True
+            logging.info(f"✅ Previous model loaded successfully for incremental training")
+        except Exception as e:
+            logging.warning(f"⚠️ Failed to load previous model: {e}")
+            logging.warning(f"   Falling back to base model")
+            previous_model = None
+            previous_tokenizer = None
+            is_incremental = False
     else:
-        model_source = base_model
+        previous_model = None
+        previous_tokenizer = None
         is_incremental = False
         logging.info(f"🆕 Starting fresh training from base model")
 
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     training_type = "incremental" if is_incremental else "fresh"
-    output_dir = Path(f"models/{training_type}_{timestamp}")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    logging.info(f"📁 Output directory: {output_dir}")
+    run_name = f"mbg-sentiment-{training_type}-{timestamp}"
 
-    with mlflow.start_run(run_name="mbg-sentiment-analysis-train"):
+    with mlflow.start_run(run_name=run_name):
 
         mlflow.log_params({
             "base_model": base_model,
@@ -174,16 +184,27 @@ def train(args):
         val_ds_raw = full_dataset.select(val_idx)
         logging.info(f"📊 Train size: {len(train_ds_raw)}, Validation size: {len(val_ds_raw)}")
 
-        tokenizer = AutoTokenizer.from_pretrained(base_model)
+        # Load tokenizer (from previous model if incremental, otherwise from base)
+        if is_incremental and previous_tokenizer is not None:
+            tokenizer = previous_tokenizer
+            logging.info(f"📦 Using tokenizer from previous model")
+        else:
+            tokenizer = AutoTokenizer.from_pretrained(base_model)
+            logging.info(f"📦 Loading tokenizer from base model: {base_model}")
 
         train_ds = tokenize_dataset(train_ds_raw, tokenizer, max_length)
         val_ds = tokenize_dataset(val_ds_raw, tokenizer, max_length)
 
-        logging.info(f"📦 Loading model from: {model_source}")
-        model = AutoModelForSequenceClassification.from_pretrained(
-            model_source,
-            num_labels=num_labels
-        )
+        # Load model (from previous model if incremental, otherwise from base)
+        if is_incremental and previous_model is not None:
+            model = previous_model
+            logging.info(f"📦 Using previous model for incremental training")
+        else:
+            logging.info(f"📦 Loading model from base: {base_model}")
+            model = AutoModelForSequenceClassification.from_pretrained(
+                base_model,
+                num_labels=num_labels
+            )
 
         if is_incremental and freeze_layers > 0:
             freeze_lower_layers(model, freeze_layers)
@@ -191,8 +212,13 @@ def train(args):
         else:
             logging.info(f"🆕 Fresh training mode: all layers trainable")
 
+        # Create temporary output directory for training checkpoints
+        import tempfile
+        temp_output_dir = tempfile.mkdtemp(prefix=f"training_{training_type}_")
+        logging.info(f"📁 Using temporary training directory: {temp_output_dir}")
+
         training_args = TrainingArguments(
-            output_dir=str(output_dir),
+            output_dir=temp_output_dir,
             overwrite_output_dir=True,
             learning_rate=learning_rate,
             weight_decay=weight_decay,
