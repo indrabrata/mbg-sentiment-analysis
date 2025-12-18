@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /mlflow
 
 RUN pip install --no-cache-dir \
-    mlflow[auth]==2.17.2 \
+    mlflow==3.3.2 \
     psycopg2-binary \
     boto3 \
     pymysql \

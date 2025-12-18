@@ -12,6 +12,10 @@ import os
 import logging
 import json
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 import numpy as np
 import pandas as pd
@@ -31,6 +35,10 @@ from .freezing import freeze_lower_layers
 from .metrics import compute_metrics
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+# Verify S3/MinIO configuration is loaded
+logging.info(f"🔧 S3 Endpoint: {os.getenv('MLFLOW_S3_ENDPOINT_URL', 'NOT SET')}")
+logging.info(f"🔧 AWS Access Key ID: {os.getenv('AWS_ACCESS_KEY_ID', 'NOT SET')[:10]}...")
 
 MIN_F1_MACRO = float(os.getenv("MIN_F1_MACRO", "0.80"))
 
@@ -243,11 +251,7 @@ def train(args):
             MIN_F1_MACRO
         )
 
-
-        trainer.save_model(output_dir)
-        tokenizer.save_pretrained(output_dir)
-        logging.info(f"💾 Model saved locally to {output_dir}")
-
+        # Log model to MLflow (no local saving)
         try:
             logging.info("📦 Creating sentiment analysis pipeline...")
             sentiment_pipeline = pipeline(
@@ -257,14 +261,31 @@ def train(args):
                 device=-1  # CPU
             )
 
+            # Test the pipeline before logging
+            test_result = sentiment_pipeline("test")
+            logging.info(f"✅ Pipeline test successful: {test_result}")
+
+            # Log the model to MLflow
             logging.info("📤 Logging model to MLflow...")
-            mlflow.transformers.log_model(
+            logging.info(f"   MLflow Tracking URI: {mlflow.get_tracking_uri()}")
+            logging.info(f"   Artifact URI: {mlflow.get_artifact_uri()}")
+
+            model_info = mlflow.transformers.log_model(
                 transformers_model=sentiment_pipeline,
-                artifact_path="model",
-                registered_model_name=model_name
+                artifact_path="model"
             )
 
-            logging.info("✅ Model logged to MLflow and registered as: %s", model_name)
+            logging.info("✅ Model logged to MLflow successfully")
+            logging.info(f"   Model URI: {model_info.model_uri}")
+            logging.info(f"   Artifact path: {model_info.artifact_path}")
+
+            # Verify artifacts were uploaded
+            from mlflow.tracking import MlflowClient
+            client = MlflowClient()
+            artifacts = client.list_artifacts(mlflow.active_run().info.run_id, path="model")
+            logging.info(f"✅ Verified {len(artifacts)} artifacts uploaded to MLflow:")
+            for artifact in artifacts[:10]:  # Show first 10
+                logging.info(f"   - {artifact.path}")
 
         except Exception as e:
             logging.error(f"❌ Failed to log model to MLflow: {e}")

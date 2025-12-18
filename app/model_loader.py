@@ -3,12 +3,10 @@ Model loading module for Sentiment Analysis API.
 Handles loading models from MLflow registry or runs.
 """
 import traceback
-import tempfile
 from datetime import datetime
 import mlflow
 import mlflow.pyfunc
 import mlflow.transformers
-from transformers import pipeline as hf_pipeline
 
 from config import (
     MLFLOW_TRACKING_URI,
@@ -148,26 +146,25 @@ def _load_from_latest_run():
             "experiment_name": MLFLOW_EXPERIMENT_NAME
         })
 
-        # Download artifacts
-        logger.info("Downloading model artifacts...", extra={
-            "event": "artifacts_download_start",
+        # Load the model using MLflow's pyfunc loader (more robust for remote stores)
+        logger.info("Loading model using mlflow.pyfunc.load_model...", extra={
+            "event": "model_load_in_progress",
+            "run_id": run_id,
+            "model_uri": model_uri
+        })
+
+        # First check if model artifact exists
+        artifacts = client.list_artifacts(run_id, path="model")
+        if not artifacts:
+            raise RuntimeError(f"No model artifacts found in run {run_id}")
+
+        logger.info(f"Found {len(artifacts)} model artifacts", extra={
+            "event": "artifacts_found",
+            "artifact_count": len(artifacts),
             "run_id": run_id
         })
 
-        temp_dir = tempfile.mkdtemp()
-        model_path = mlflow.artifacts.download_artifacts(
-            artifact_uri=model_uri,
-            dst_path=temp_dir
-        )
-
-        logger.info(f"Artifacts downloaded to: {model_path}", extra={
-            "event": "artifacts_download_success",
-            "model_path": model_path,
-            "run_id": run_id
-        })
-
-        # Load the model directly using transformers pipeline
-        pipeline = hf_pipeline("text-classification", model=model_path)
+        pipeline = mlflow.pyfunc.load_model(model_uri)
 
         MODEL_METADATA["source"] = "mlflow_run"
         MODEL_METADATA["run_id"] = run_id
