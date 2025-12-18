@@ -221,9 +221,7 @@ def train(args):
             if isinstance(v, (int, float)):
                 mlflow.log_metric(k, v)
 
-        # -------------------------
-        # Model Performance Gate
-        # -------------------------
+
         eval_f1 = float(metrics.get("eval_f1_macro", 0.0))
 
         if eval_f1 < MIN_F1_MACRO:
@@ -245,16 +243,11 @@ def train(args):
             MIN_F1_MACRO
         )
 
-        # -------------------------
-        # Save model locally
-        # -------------------------
+
         trainer.save_model(output_dir)
         tokenizer.save_pretrained(output_dir)
         logging.info(f"💾 Model saved locally to {output_dir}")
 
-        # -------------------------
-        # Create pipeline and log to MLflow
-        # -------------------------
         try:
             logging.info("📦 Creating sentiment analysis pipeline...")
             sentiment_pipeline = pipeline(
