@@ -335,18 +335,37 @@ def train(args):
 
         if push_to_mlflow:
             try:
-                # Log model using MLflow transformers flavor (for proper model loading)
+                from mlflow.models import infer_signature
+                import torch
+
+                sample_text = ["mbg sangat sehat!!!"]
+                sample_encoding = tokenizer(
+                    sample_text, 
+                    return_tensors="pt", 
+                    truncation=True, 
+                    padding=True, 
+                    max_length=max_length
+                )
+                
+                model.eval()
+                with torch.no_grad():
+                    outputs = model(**sample_encoding)
+                    sample_predictions = outputs.logits.numpy()
+                
+                signature = infer_signature(sample_text, sample_predictions)
+
                 mlflow.transformers.log_model(
                     transformers_model={
                         "model": model,
                         "tokenizer": tokenizer
                     },
                     artifact_path="model",
+                    signature=signature,
+                    task="text-classification",
                     registered_model_name=os.getenv("MLFLOW_MODEL_NAME", None)
                 )
                 logging.info("✅ Model logged to MLflow using transformers flavor")
 
-                # Also log raw model artifacts (for backup/direct access)
                 mlflow.log_artifacts(str(output_dir), artifact_path="model_files")
                 logging.info("✅ Model artifacts logged to MLflow")
 
