@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""
-trainer.py
-Incremental fine-tuning IndoBERTweet with expert-labelled weekly data
-+ partial layer freezing
-+ evaluation (accuracy, F1-macro)
-+ MLflow metric logging
-+ model performance gate
-"""
 
 import os
 import logging
@@ -150,9 +142,7 @@ def train(args):
         is_incremental = False
         logging.info(f"🆕 Starting fresh training from base model: {BASE_MODEL}")
 
-    # -------------------------
-    # Auto-generate output directory with timestamp
-    # -------------------------
+
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     training_type = "incremental" if is_incremental else "fresh"
@@ -160,7 +150,7 @@ def train(args):
     output_dir.mkdir(parents=True, exist_ok=True)
     logging.info(f"📁 Output directory: {output_dir}")
 
-    with mlflow.start_run(run_name="mbg-sentimen-analysis-train"):
+    with mlflow.start_run(run_name="mbg-sentimen-analysis-model"):
 
         # Log experiment config
         mlflow.log_params({
@@ -177,9 +167,6 @@ def train(args):
             "min_f1_macro_threshold": min_f1_macro
         })
 
-        # -------------------------
-        # Load and split data
-        # -------------------------
         logging.info("📂 Loading training data from: %s", args.train_data)
         full_dataset = load_dataset(args.train_data)
 
@@ -251,9 +238,7 @@ def train(args):
 
         trainer.train()
 
-        # -------------------------
-        # Final evaluation & metrics
-        # -------------------------
+
         metrics = trainer.evaluate()
         logging.info("📊 Evaluation metrics: %s", metrics)
 
@@ -262,9 +247,7 @@ def train(args):
             if isinstance(v, (int, float)):
                 mlflow.log_metric(k, v)
 
-        # -------------------------
-        # Model Performance Gate
-        # -------------------------
+
         f1_macro_score = metrics.get("eval_f1_macro", 0)
         
         if f1_macro_score < min_f1_macro:
@@ -286,9 +269,7 @@ def train(args):
             
             push_to_mlflow = True
 
-        # -------------------------
-        # Generate confusion matrix
-        # -------------------------
+
         try:
             import matplotlib.pyplot as plt
             import seaborn as sns
@@ -317,13 +298,11 @@ def train(args):
             plt.xlabel("Predicted Label")
             plt.tight_layout()
 
-            # Save and log confusion matrix
             cm_path = "confusion_matrix.png"
             plt.savefig(cm_path)
             mlflow.log_artifact(cm_path)
             plt.close()
 
-            # Remove temporary file
             if os.path.exists(cm_path):
                 os.remove(cm_path)
 
@@ -331,15 +310,9 @@ def train(args):
         except Exception as e:
             logging.warning(f"⚠️ Could not generate confusion matrix: {e}")
 
-        # -------------------------
-        # Save model locally
-        # -------------------------
         trainer.save_model(output_dir)
         tokenizer.save_pretrained(output_dir)
 
-        # -------------------------
-        # Save metrics summary
-        # -------------------------
         metrics_summary = {
             "accuracy": float(metrics.get("eval_accuracy", 0)),
             "f1_macro": float(metrics.get("eval_f1_macro", 0)),
@@ -358,15 +331,11 @@ def train(args):
         with open(metrics_path, "w") as f:
             json.dump(metrics_summary, f, indent=2)
 
-        # Log metrics summary as artifact
         mlflow.log_artifact(str(metrics_path))
 
-        # -------------------------
-        # Log model artifacts to MLflow (with performance gate)
-        # -------------------------
         if push_to_mlflow:
             try:
-                # Log model using MLflow transformers flavor
+                # Log model using MLflow transformers flavor (for proper model loading)
                 mlflow.transformers.log_model(
                     transformers_model={
                         "model": model,
@@ -376,8 +345,15 @@ def train(args):
                     registered_model_name=os.getenv("MLFLOW_MODEL_NAME", None)
                 )
                 logging.info("✅ Model logged to MLflow using transformers flavor")
+
+                # Also log raw model artifacts (for backup/direct access)
+                mlflow.log_artifacts(str(output_dir), artifact_path="model_files")
+                logging.info("✅ Model artifacts logged to MLflow")
+
             except Exception as e:
-                logging.warning(f"⚠️ Could not log model: {e}")
+                logging.error(f"❌ Could not log model: {e}")
+                import traceback
+                logging.error(traceback.format_exc())
         else:
             logging.info("⏭️ Skipping MLflow artifact logging (performance gate failed)")
 
