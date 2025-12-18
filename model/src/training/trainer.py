@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+trainer.py
+Incremental fine-tuning IndoBERTweet with expert-labelled weekly data
++ partial layer freezing
++ evaluation (accuracy, F1-macro)
++ MLflow metric logging
++ model performance gate BEFORE MLflow model logging
+"""
 
 import os
 import logging
@@ -10,23 +18,21 @@ import pandas as pd
 from datasets import Dataset
 
 import mlflow
-import mlflow.pytorch
 import mlflow.transformers
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
     Trainer,
-    TrainingArguments
+    TrainingArguments,
+    pipeline
 )
 
 from .freezing import freeze_lower_layers
 from .metrics import compute_metrics
 
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-BASE_MODEL = "indolem/indobertweet-base-uncased"
-
+MIN_F1_MACRO = float(os.getenv("MIN_F1_MACRO", "0.80"))
 
 def load_dataset(csv_path: str) -> Dataset:
     df = pd.read_csv(csv_path)
@@ -52,7 +58,6 @@ def tokenize_dataset(ds: Dataset, tokenizer, max_length: int = 128):
         batched=True
     )
 
-
 def check_previous_model_exists(experiment_name: str) -> tuple:
     """
     Check if there's a previous model in MLflow experiment.
@@ -62,41 +67,30 @@ def check_previous_model_exists(experiment_name: str) -> tuple:
         from mlflow.tracking import MlflowClient
 
         client = MlflowClient()
-
-        # Get experiment
         experiment = client.get_experiment_by_name(experiment_name)
+
         if not experiment:
-            logging.info("📭 No previous experiment found. Starting fresh training.")
             return False, None
 
-        # Search for runs with logged models
         runs = client.search_runs(
             experiment_ids=[experiment.experiment_id],
-            filter_string="",
             order_by=["start_time DESC"],
             max_results=1
         )
 
         if not runs:
-            logging.info("📭 No previous runs found. Starting fresh training.")
             return False, None
 
-        latest_run = runs[0]
-        run_id = latest_run.info.run_id
-
-        # Check if this run has model artifacts
+        run_id = runs[0].info.run_id
         artifacts = client.list_artifacts(run_id, path="model")
+
         if not artifacts:
-            logging.info("📭 No model artifacts in latest run. Starting fresh training.")
             return False, None
 
-        # Model exists, return the URI
-        model_uri = f"runs:/{run_id}/model"
-        logging.info(f"✅ Found previous model: {model_uri}")
-        return True, model_uri
+        return True, f"runs:/{run_id}/model"
 
     except Exception as e:
-        logging.warning(f"⚠️ Error checking for previous model: {e}")
+        logging.warning(f"⚠️ Error checking previous model: {e}")
         return False, None
 
 
@@ -111,23 +105,17 @@ def train(args):
     freeze_layers = int(os.getenv("FREEZE_LAYERS", "6"))
     validation_split = float(os.getenv("VALIDATION_SPLIT", "0.2"))
     num_labels = int(os.getenv("NUM_LABELS", "3"))
-    min_f1_macro = float(os.getenv("MIN_F1_MACRO", "0.70"))
-
 
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"))
     experiment_name = os.getenv("MLFLOW_EXPERIMENT_NAME", "mbg-sentiment-analysis")
+    base_model = os.getenv("BASE_MODEL", "indolem/indobertweet-base-uncased")
+    model_name = os.getenv("MODEL_NAME", "mbg-sentiment-analysis-model")
 
-    # Set or create experiment
-    try:
-        mlflow.set_experiment(experiment_name)
-    except Exception as e:
-        logging.warning(f"Could not set experiment: {e}")
+    mlflow.set_experiment(experiment_name)
 
- 
     has_previous_model, previous_model_uri = check_previous_model_exists(experiment_name)
 
     if has_previous_model:
-        # Download previous model from MLflow
         import tempfile
         temp_dir = tempfile.mkdtemp()
         model_source = mlflow.artifacts.download_artifacts(
@@ -135,13 +123,11 @@ def train(args):
             dst_path=temp_dir
         )
         is_incremental = True
-        logging.info(f"📥 Downloaded previous model from MLflow for incremental training")
+        logging.info(f"📥 Using previous model for incremental training")
     else:
-        # No previous model, train from scratch
-        model_source = BASE_MODEL
+        model_source = base_model
         is_incremental = False
-        logging.info(f"🆕 Starting fresh training from base model: {BASE_MODEL}")
-
+        logging.info(f"🆕 Starting fresh training from base model")
 
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -150,12 +136,10 @@ def train(args):
     output_dir.mkdir(parents=True, exist_ok=True)
     logging.info(f"📁 Output directory: {output_dir}")
 
-    with mlflow.start_run(run_name="mbg-sentimen-analysis-model"):
+    with mlflow.start_run(run_name="mbg-sentiment-analysis-train"):
 
-        # Log experiment config
         mlflow.log_params({
-            "base_model": BASE_MODEL,
-            "model_source": model_source,
+            "base_model": base_model,
             "is_incremental": is_incremental,
             "epochs": epochs,
             "learning_rate": learning_rate,
@@ -164,30 +148,30 @@ def train(args):
             "max_length": max_length,
             "weight_decay": weight_decay,
             "validation_split": validation_split,
-            "min_f1_macro_threshold": min_f1_macro
+            "min_f1_macro_threshold": MIN_F1_MACRO
         })
 
-        logging.info("📂 Loading training data from: %s", args.train_data)
+        logging.info(f"📂 Loading training data from: {args.train_data}")
         full_dataset = load_dataset(args.train_data)
 
-        # Split into train and validation
         from sklearn.model_selection import train_test_split
-        train_indices, val_indices = train_test_split(
+        train_idx, val_idx = train_test_split(
             range(len(full_dataset)),
             test_size=validation_split,
             random_state=42,
-            stratify=full_dataset["label"]  # Stratified split to maintain label distribution
+            stratify=full_dataset["label"]
         )
 
-        train_ds_raw = full_dataset.select(train_indices)
-        val_ds_raw = full_dataset.select(val_indices)
-
+        train_ds_raw = full_dataset.select(train_idx)
+        val_ds_raw = full_dataset.select(val_idx)
         logging.info(f"📊 Train size: {len(train_ds_raw)}, Validation size: {len(val_ds_raw)}")
 
+        tokenizer = AutoTokenizer.from_pretrained(base_model)
 
-        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+        train_ds = tokenize_dataset(train_ds_raw, tokenizer, max_length)
+        val_ds = tokenize_dataset(val_ds_raw, tokenizer, max_length)
 
-        logging.info("📦 Loading model from: %s", model_source)
+        logging.info(f"📦 Loading model from: {model_source}")
         model = AutoModelForSequenceClassification.from_pretrained(
             model_source,
             num_labels=num_labels
@@ -195,33 +179,24 @@ def train(args):
 
         if is_incremental and freeze_layers > 0:
             freeze_lower_layers(model, freeze_layers)
-            logging.info("🔒 Incremental training mode: %d layers frozen", freeze_layers)
+            logging.info(f"🔒 Incremental training mode: {freeze_layers} layers frozen")
         else:
-            logging.info("🆕 Fresh training mode: all layers trainable")
-
-
-        train_ds = tokenize_dataset(train_ds_raw, tokenizer, max_length)
-        val_ds = tokenize_dataset(val_ds_raw, tokenizer, max_length)
-
+            logging.info(f"🆕 Fresh training mode: all layers trainable")
 
         training_args = TrainingArguments(
             output_dir=str(output_dir),
             overwrite_output_dir=True,
-
             learning_rate=learning_rate,
             weight_decay=weight_decay,
             num_train_epochs=epochs,
             per_device_train_batch_size=batch_size,
             per_device_eval_batch_size=batch_size,
-
             eval_strategy="epoch",
             save_strategy="epoch",
             save_total_limit=1,
-
             load_best_model_at_end=True,
             metric_for_best_model="f1_macro",
             greater_is_better=True,
-
             logging_steps=50,
             report_to="none"
         )
@@ -235,150 +210,73 @@ def train(args):
             compute_metrics=compute_metrics
         )
 
-
+        logging.info("🏋️ Starting training...")
         trainer.train()
 
-
+        logging.info("📊 Evaluating model...")
         metrics = trainer.evaluate()
         logging.info("📊 Evaluation metrics: %s", metrics)
 
-        # Log metrics to MLflow
         for k, v in metrics.items():
             if isinstance(v, (int, float)):
                 mlflow.log_metric(k, v)
 
+        # -------------------------
+        # Model Performance Gate
+        # -------------------------
+        eval_f1 = float(metrics.get("eval_f1_macro", 0.0))
 
-        f1_macro_score = metrics.get("eval_f1_macro", 0)
-        
-        if f1_macro_score < min_f1_macro:
-            logging.warning(f"⚠️ MODEL PERFORMANCE GATE FAILED!")
-            logging.warning(f"   F1 Macro: {f1_macro_score:.4f} < Threshold: {min_f1_macro:.4f}")
-            logging.warning(f"   Model will NOT be pushed to MLflow registry")
-            
-            mlflow.set_tag("performance_gate", "FAILED")
-            mlflow.set_tag("gate_reason", f"F1 Macro {f1_macro_score:.4f} below threshold {min_f1_macro:.4f}")
-            
-            push_to_mlflow = False
-        else:
-            logging.info(f"✅ MODEL PERFORMANCE GATE PASSED!")
-            logging.info(f"   F1 Macro: {f1_macro_score:.4f} >= Threshold: {min_f1_macro:.4f}")
-            logging.info(f"   Model will be pushed to MLflow")
-            
-            mlflow.set_tag("performance_gate", "PASSED")
-            mlflow.set_tag("gate_reason", f"F1 Macro {f1_macro_score:.4f} meets threshold {min_f1_macro:.4f}")
-            
-            push_to_mlflow = True
-
-
-        try:
-            import matplotlib.pyplot as plt
-            import seaborn as sns
-            from sklearn.metrics import confusion_matrix
-
-            # Get predictions for confusion matrix
-            predictions = trainer.predict(val_ds)
-            y_pred = np.argmax(predictions.predictions, axis=1)
-            y_true = predictions.label_ids
-
-            # Create confusion matrix
-            cm = confusion_matrix(y_true, y_pred)
-
-            # Plot confusion matrix
-            plt.figure(figsize=(8, 6))
-            sns.heatmap(
-                cm,
-                annot=True,
-                fmt="d",
-                xticklabels=["Negative", "Neutral", "Positive"],
-                yticklabels=["Negative", "Neutral", "Positive"],
-                cmap="Blues"
+        if eval_f1 < MIN_F1_MACRO:
+            mlflow.log_param("model_accepted", False)
+            mlflow.set_tag("model_status", "rejected")
+            logging.error(
+                "❌ MODEL REJECTED: eval_f1_macro=%.4f < threshold=%.2f",
+                eval_f1,
+                MIN_F1_MACRO
             )
-            plt.title("Confusion Matrix")
-            plt.ylabel("True Label")
-            plt.xlabel("Predicted Label")
-            plt.tight_layout()
+            logging.error("   Model will NOT be logged to MLflow")
+            return
 
-            cm_path = "confusion_matrix.png"
-            plt.savefig(cm_path)
-            mlflow.log_artifact(cm_path)
-            plt.close()
+        mlflow.log_param("model_accepted", True)
+        mlflow.set_tag("model_status", "accepted")
+        logging.info(
+            "✅ MODEL ACCEPTED: eval_f1_macro=%.4f >= threshold=%.2f",
+            eval_f1,
+            MIN_F1_MACRO
+        )
 
-            if os.path.exists(cm_path):
-                os.remove(cm_path)
-
-            logging.info("✅ Confusion matrix logged to MLflow")
-        except Exception as e:
-            logging.warning(f"⚠️ Could not generate confusion matrix: {e}")
-
+        # -------------------------
+        # Save model locally
+        # -------------------------
         trainer.save_model(output_dir)
         tokenizer.save_pretrained(output_dir)
+        logging.info(f"💾 Model saved locally to {output_dir}")
 
-        metrics_summary = {
-            "accuracy": float(metrics.get("eval_accuracy", 0)),
-            "f1_macro": float(metrics.get("eval_f1_macro", 0)),
-            "loss": float(metrics.get("eval_loss", 0)),
-            "epochs": epochs,
-            "learning_rate": learning_rate,
-            "batch_size": batch_size,
-            "freeze_layers": freeze_layers if is_incremental else 0,
-            "is_incremental": is_incremental,
-            "training_type": training_type,
-            "performance_gate_passed": push_to_mlflow,
-            "performance_gate_threshold": min_f1_macro
-        }
+        # -------------------------
+        # Create pipeline and log to MLflow
+        # -------------------------
+        try:
+            logging.info("📦 Creating sentiment analysis pipeline...")
+            sentiment_pipeline = pipeline(
+                "text-classification",
+                model=model,
+                tokenizer=tokenizer,
+                device=-1  # CPU
+            )
 
-        metrics_path = output_dir / "training_metrics.json"
-        with open(metrics_path, "w") as f:
-            json.dump(metrics_summary, f, indent=2)
+            logging.info("📤 Logging model to MLflow...")
+            mlflow.transformers.log_model(
+                transformers_model=sentiment_pipeline,
+                artifact_path="model",
+                registered_model_name=model_name
+            )
 
-        mlflow.log_artifact(str(metrics_path))
+            logging.info("✅ Model logged to MLflow and registered as: %s", model_name)
 
-        if push_to_mlflow:
-            try:
-                from mlflow.models import infer_signature
-                import torch
+        except Exception as e:
+            logging.error(f"❌ Failed to log model to MLflow: {e}")
+            import traceback
+            logging.error(traceback.format_exc())
+            raise
 
-                sample_text = ["mbg sangat sehat!!!"]
-                sample_encoding = tokenizer(
-                    sample_text, 
-                    return_tensors="pt", 
-                    truncation=True, 
-                    padding=True, 
-                    max_length=max_length
-                )
-                
-                model.eval()
-                with torch.no_grad():
-                    outputs = model(**sample_encoding)
-                    sample_predictions = outputs.logits.numpy()
-                
-                signature = infer_signature(sample_text, sample_predictions)
-
-                mlflow.transformers.log_model(
-                    transformers_model={
-                        "model": model,
-                        "tokenizer": tokenizer
-                    },
-                    artifact_path="model",
-                    signature=signature,
-                    task="text-classification",
-                    registered_model_name=os.getenv("MLFLOW_MODEL_NAME", None)
-                )
-                logging.info("✅ Model logged to MLflow using transformers flavor")
-
-                mlflow.log_artifacts(str(output_dir), artifact_path="model_files")
-                logging.info("✅ Model artifacts logged to MLflow")
-
-            except Exception as e:
-                logging.error(f"❌ Could not log model: {e}")
-                import traceback
-                logging.error(traceback.format_exc())
-        else:
-            logging.info("⏭️ Skipping MLflow artifact logging (performance gate failed)")
-
-        logging.info("💾 Model saved to %s", output_dir)
-        
-        if push_to_mlflow:
-            logging.info("✅ Incremental training finished successfully - Model pushed to MLflow")
-        else:
-            logging.info("⚠️ Incremental training finished - Model NOT pushed to MLflow (performance gate failed)")
+        logging.info("✅ Training completed successfully!")
