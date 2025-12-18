@@ -19,6 +19,7 @@ from datasets import Dataset
 
 import mlflow
 import mlflow.pytorch
+import mlflow.transformers
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
@@ -365,12 +366,25 @@ def train(args):
         # -------------------------
         if push_to_mlflow:
             try:
+<<<<<<< HEAD
                 # Log all model files as artifacts
                 mlflow.log_artifacts(str(output_dir), artifact_path="model")
 
                 logging.info("✅ Model artifacts logged to MLflow")
+=======
+                # Log model using MLflow transformers flavor
+                mlflow.transformers.log_model(
+                    transformers_model={
+                        "model": model,
+                        "tokenizer": tokenizer
+                    },
+                    artifact_path="model",
+                    registered_model_name=os.getenv("MLFLOW_MODEL_NAME", None)
+                )
+                logging.info("✅ Model logged to MLflow using transformers flavor")
+>>>>>>> d1ccc77 (refactor : update trainer.py)
             except Exception as e:
-                logging.warning(f"⚠️ Could not log model artifacts: {e}")
+                logging.warning(f"⚠️ Could not log model: {e}")
         else:
             logging.info("⏭️ Skipping MLflow artifact logging (performance gate failed)")
 
