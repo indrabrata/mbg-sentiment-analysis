@@ -160,7 +160,7 @@ def train(args):
     output_dir.mkdir(parents=True, exist_ok=True)
     logging.info(f"📁 Output directory: {output_dir}")
 
-    with mlflow.start_run(run_name="mbg-sentimen-analysis-model"):
+    with mlflow.start_run(run_name="mbg-sentimen-analysis-train"):
 
         # Log experiment config
         mlflow.log_params({
@@ -366,12 +366,6 @@ def train(args):
         # -------------------------
         if push_to_mlflow:
             try:
-<<<<<<< HEAD
-                # Log all model files as artifacts
-                mlflow.log_artifacts(str(output_dir), artifact_path="model")
-
-                logging.info("✅ Model artifacts logged to MLflow")
-=======
                 # Log model using MLflow transformers flavor
                 mlflow.transformers.log_model(
                     transformers_model={
@@ -382,7 +376,6 @@ def train(args):
                     registered_model_name=os.getenv("MLFLOW_MODEL_NAME", None)
                 )
                 logging.info("✅ Model logged to MLflow using transformers flavor")
->>>>>>> d1ccc77 (refactor : update trainer.py)
             except Exception as e:
                 logging.warning(f"⚠️ Could not log model: {e}")
         else:
