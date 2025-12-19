@@ -47,5 +47,8 @@ ENV LOG_LEVEL=INFO
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
+LABEL "org.opencontainers.image.source"="https://github.com/indrabrata/mbg-sentiment-analysis"
+LABEL "org.opencontainers.image.description"="Implementation MLOPS in MBG Sentiment Analysis from platform X"
+
 # Run the application
 CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

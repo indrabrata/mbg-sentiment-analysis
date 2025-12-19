@@ -1,5 +1,10 @@
 name: App Deployment
 
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
 on:
   push:
     branches:
@@ -19,9 +24,6 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - name: Checkout repository
@@ -32,7 +34,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.TOKEN }}
 
       - name: Extract metadata for Docker
         id: meta
@@ -82,17 +84,13 @@ jobs:
           key: ${{ secrets.VM_PRIVATE_KEY }}
           port: ${{ secrets.VM_PORT }}
           script: |
-            # Login to GitHub Container Registry
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "${{ secrets.TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Pull latest image
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
-            # Stop and remove old container
             docker stop sentiment-app || true
             docker rm sentiment-app || true
 
-            # Run new container
             docker run -d --name sentiment-app \
               --restart unless-stopped \
               -p 8000:8000 \
@@ -101,7 +99,6 @@ jobs:
               -e MLFLOW_TRACKING_PASSWORD="${{ secrets.MLFLOW_TRACKING_PASSWORD }}" \
               -e MLFLOW_EXPERIMENT_NAME="${{ secrets.MLFLOW_EXPERIMENT_NAME || 'mbg-sentiment-analysis' }}" \
               -e MLFLOW_MODEL_NAME="${{ secrets.MLFLOW_MODEL_NAME || '' }}" \
-              -e MLFLOW_MODEL_STAGE="${{ secrets.MLFLOW_MODEL_STAGE || 'Production' }}" \
               -e AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
               -e AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
               -e MLFLOW_S3_ENDPOINT_URL="${{ secrets.MLFLOW_S3_ENDPOINT_URL }}" \
@@ -114,5 +111,4 @@ jobs:
               -e API_PORT="8000" \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
-            # Clean up old images
             docker image prune -f
