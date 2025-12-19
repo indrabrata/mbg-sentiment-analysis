@@ -4,7 +4,7 @@ This repository contains the code and resources for the MBG Sentiment Analysis M
 
 ## System Design
 
-<img src="./assets/system-design.png" alt="System Design Diagram" width="600"/>
+<img src="./assets/system-design.png" alt="System Design Diagram" width="1000"/>
 
 ## Technologies
 
@@ -17,6 +17,7 @@ This repository contains the code and resources for the MBG Sentiment Analysis M
 - Minio
 - Grafana
 - Nginx
+- DVC
 
 ## Model
 
