@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     Application lifespan manager.
     Handles startup and shutdown events.
     """
-    # Startup
+
     logger.info("Application starting up", extra={"event": "startup"})
     try:
         # Test database connection
