@@ -201,7 +201,7 @@ def predict_batch_tweet(request: Request, file: UploadFile = File(...)):
     logger.info("Starting batch tweet prediction", extra={
         "event": "batch_tweet_prediction_start",
         "request_id": request_id,
-        "filename": file.filename
+        "uploaded_filename": file.filename
     })
 
     try:
@@ -211,14 +211,14 @@ def predict_batch_tweet(request: Request, file: UploadFile = File(...)):
             "event": "csv_read_success",
             "request_id": request_id,
             "row_count": len(df),
-            "filename": file.filename
+            "uploaded_filename": file.filename
         })
     except Exception as e:
         logger.error(f"CSV read error: {str(e)}", extra={
             "event": "csv_read_failed",
             "request_id": request_id,
             "error": str(e),
-            "filename": file.filename
+            "uploaded_filename": file.filename
         })
         raise HTTPException(status_code=400, detail=f"CSV read error: {e}")
 
@@ -341,7 +341,7 @@ def predict_batch(request: Request, file: UploadFile = File(...)):
     logger.info("Starting batch prediction", extra={
         "event": "batch_prediction_start",
         "request_id": request_id,
-        "filename": file.filename
+        "uploaded_filename": file.filename
     })
 
     try:
@@ -350,14 +350,14 @@ def predict_batch(request: Request, file: UploadFile = File(...)):
             "event": "csv_read_success",
             "request_id": request_id,
             "row_count": len(df),
-            "filename": file.filename
+            "uploaded_filename": file.filename
         })
     except Exception as e:
         logger.error(f"CSV read error: {str(e)}", extra={
             "event": "csv_read_failed",
             "request_id": request_id,
             "error": str(e),
-            "filename": file.filename
+            "uploaded_filename": file.filename
         })
         raise HTTPException(status_code=400, detail=f"CSV read error: {e}")
 
